@@ -5,6 +5,11 @@ class RdapParser
 {
     public static function parse($data)
     {
+        // Guard: RDAP error responses (e.g. 404 Not Found) should not be parsed
+        if (!$data || isset($data['errorCode'])) {
+            return null;
+        }
+
         $events = [];
         if (isset($data['events'])) {
             foreach ($data['events'] as $event) {
