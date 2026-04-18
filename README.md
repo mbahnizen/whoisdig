@@ -6,7 +6,8 @@
 
 <p align="center">
   <strong>Intelligent WHOIS, RDAP & DNS Lookup Engine</strong><br/>
-  A fast, hybrid domain intelligence tool with IP geolocation, circuit breakers, and smart caching.
+  A fast, hybrid domain intelligence tool with IP geolocation, circuit breakers, and smart caching.<br><br>
+  🚀 <b>Live Demo:</b> <a href="https://whoisdig.wasmer.app/">https://whoisdig.wasmer.app/</a>
 </p>
 
 <p align="center">
