@@ -1,0 +1,11 @@
+name: whoisdig
+app_id: da_nBBIbtXU0aAm
+owner: belajarnizen
+package: .
+command: run
+volumes:
+- name: storage-volume
+  mount: /app/storage
+scaling:
+  mode: single_concurrency
+kind: wasmer.io/App.v0

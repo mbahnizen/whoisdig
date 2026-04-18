@@ -1,0 +1,74 @@
+<?php
+namespace WhoisDig\Utils;
+
+class CircuitBreaker
+{
+    private $logDir;
+    private $threshold;
+    private $timeWindow;
+    private $cooldown;
+
+    public function __construct($threshold = 5, $timeWindow = 60, $cooldown = 300)
+    {
+        $this->logDir = __DIR__ . '/../../storage/logs/';
+        $this->threshold = $threshold; // Max failures
+        $this->timeWindow = $timeWindow; // Window to count failures (seconds)
+        $this->cooldown = $cooldown; // How long to ban (seconds)
+        
+        if (!is_dir($this->logDir)) {
+            mkdir($this->logDir, 0755, true);
+        }
+    }
+
+    private function getFile($server)
+    {
+        return $this->logDir . 'cb_' . md5($server) . '.json';
+    }
+
+    public function recordFailure($server)
+    {
+        $file = $this->getFile($server);
+        $now = time();
+        
+        $content = @file_get_contents($file);
+        $data = $content ? json_decode($content, true) : ['failures' => [], 'banned_until' => 0];
+        
+        // Cleanup old failures
+        $data['failures'] = array_filter($data['failures'] ?? [], function($t) use ($now) {
+            return $t > ($now - $this->timeWindow);
+        });
+        
+        $data['failures'][] = $now;
+        
+        if (count($data['failures']) >= $this->threshold) {
+            $data['banned_until'] = $now + $this->cooldown;
+            Metrics::record('circuit_broken', $server);
+        }
+        
+        @file_put_contents($file, json_encode($data));
+    }
+    
+    public function isAvailable($server)
+    {
+        $file = $this->getFile($server);
+        if (!file_exists($file)) return true;
+        
+        $content = @file_get_contents($file);
+        if ($content) {
+            $data = json_decode($content, true);
+            if (isset($data['banned_until']) && time() < $data['banned_until']) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    public function recordSuccess($server)
+    {
+        $file = $this->getFile($server);
+        if (file_exists($file)) {
+            @unlink($file);
+        }
+    }
+}
