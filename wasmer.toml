@@ -1,6 +1,6 @@
 [package]
 name = "belajarnizen/whoisdig"
-version = "0.1.0"
+version = "0.2.0"
 description = "Domain & DNS Intelligence Tool — WHOIS, RDAP, DNS Lookup"
 license = "MIT"
 private = true
@@ -10,11 +10,3 @@ private = true
 
 [fs]
 "/app" = "."
-
-[[command]]
-name = "run"
-module = "php/php:php"
-runner = "wasi"
-
-[command.annotations.wasi]
-main-args = ["-t", "/app/public", "-S", "localhost:8080"]
