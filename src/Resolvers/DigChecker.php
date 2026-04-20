@@ -26,7 +26,15 @@ class DigChecker
 
         // Special Case: PTR lookup on IP address
         if ($isIP && $recordType === 'PTR') {
-            // Convert IP to in-addr.arpa
+            // Phase 1: IPv6 PTR not yet supported
+            if (filter_var($target, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                return [
+                    'success' => false,
+                    'error' => 'IPv6 PTR lookup belum didukung saat ini.',
+                    'domain' => $target
+                ];
+            }
+            // IPv4: Convert to in-addr.arpa
             $octets = explode('.', $target);
             $target = implode('.', array_reverse($octets)) . '.in-addr.arpa';
         }

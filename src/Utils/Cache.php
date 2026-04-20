@@ -47,19 +47,23 @@ class Cache
     }
 
     /**
-     * Get a value from cache
-     * Implements Stale-While-Revalidate and locking
+     * Get a value from cache with proper Stale-While-Revalidate.
+     * 
+     * The callback is CACHE-IGNORANT — it only returns fresh data.
+     * All caching logic (set, TTL, negative cache) is handled here.
      * 
      * @param string $key
-     * @param callable $revalidateCallback Passed to perform sync refresh if needed
+     * @param callable|null $revalidateCallback Returns fresh data (no cache awareness needed)
+     * @param int $ttl TTL in seconds for fresh data (default: 3600)
+     * @param int $negativeTtl TTL in seconds for negative cache on failure (default: 300)
      * @return mixed|null
      */
-    public function get($key, ?callable $revalidateCallback = null)
+    public function get($key, ?callable $revalidateCallback = null, $ttl = 3600, $negativeTtl = 300)
     {
         $file = $this->getFilePath($key);
 
         if (!file_exists($file)) {
-            return $this->revalidateAndSet($key, $revalidateCallback);
+            return $this->fetchAndCache($key, $revalidateCallback, $ttl, $negativeTtl);
         }
 
         $content = @file_get_contents($file);
@@ -81,31 +85,36 @@ class Cache
                     $tempPayload['expires_at'] = $now + 60; // 60s lock
                     @file_put_contents($file, json_encode($tempPayload));
                     
-                    return $this->revalidateAndSet($key, $revalidateCallback);
+                    return $this->fetchAndCache($key, $revalidateCallback, $ttl, $negativeTtl);
                 }
 
                 // Completely expired
-                return $this->revalidateAndSet($key, $revalidateCallback);
+                return $this->fetchAndCache($key, $revalidateCallback, $ttl, $negativeTtl);
             }
         }
         
-        return $this->revalidateAndSet($key, $revalidateCallback);
+        return $this->fetchAndCache($key, $revalidateCallback, $ttl, $negativeTtl);
     }
 
-    private function revalidateAndSet($key, $callback)
+    /**
+     * Execute callback and cache the result.
+     * Callback is cache-ignorant — it just returns data.
+     * Cache handles all storage logic.
+     */
+    private function fetchAndCache($key, $callback, $ttl, $negativeTtl)
     {
         if (!$callback) {
             return null;
         }
 
         $result = call_user_func($callback);
+
         if ($result !== null) {
-            // Set handles the ttl logic via service layer
-            // but default we save it. (TTL should be passed via callback if varied, 
-            // but for simplicity we rely on manual ->set in the service or defaults here)
-            // Actually, the callback usually just returns data and we set it with default.
-            // A better pattern: callback returns data, we cache it. IF it's an error, maybe we setNegative.
+            $this->set($key, $result, $ttl);
+        } else {
+            $this->setNegative($key, $negativeTtl);
         }
+
         return $result;
     }
 

@@ -729,6 +729,12 @@ async function retryDomain(domain, btn) {
             newCard = createDigCard(result);
         }
         card.replaceWith(newCard);
+
+        // BUG-L3 FIX: Sync processedResults by domain match
+        const domainLower = domain.toLowerCase();
+        processedResults = processedResults.map(r =>
+            (r.domain || '').toLowerCase() === domainLower ? result : r
+        );
     } catch (err) {
         btn.disabled = false;
         btn.innerHTML = '<i class="ph-bold ph-arrow-clockwise"></i> Retry';

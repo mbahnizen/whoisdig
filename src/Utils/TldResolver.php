@@ -123,6 +123,7 @@ class TldResolver
         curl_setopt($ch, CURLOPT_USERAGENT, 'WHOISDIG-PSL-Updater/1.0');
         $data = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
         if ($code === 200 && strlen($data) > 1000) {
             file_put_contents(self::$pslPath, $data);

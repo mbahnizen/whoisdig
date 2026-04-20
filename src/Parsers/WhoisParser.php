@@ -42,7 +42,13 @@ class WhoisParser
     {
         preg_match_all('/(?:Domain )?Status\s*:\s*([^\s]+)/i', $raw, $matches);
         if (!empty($matches[1])) {
-            return array_values(array_unique(array_map('trim', $matches[1])));
+            $cleaned = array_map(function ($s) {
+                // Strip trailing punctuation and non-alphanumeric chars
+                return preg_replace('/[^a-zA-Z0-9\-#:\/\.]/i', '', trim($s));
+            }, $matches[1]);
+            // Remove empty strings after cleanup
+            $cleaned = array_filter($cleaned, fn($s) => $s !== '');
+            return array_values(array_unique($cleaned));
         }
         return [];
     }

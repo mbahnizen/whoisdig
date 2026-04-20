@@ -79,28 +79,49 @@ function checkRateLimit($identifier, $maxRequests = 120, $timeWindow = 3600)
         }
     }
 
-    if (file_exists($file)) {
-        $data = json_decode(file_get_contents($file), true);
-
-        // Clean old requests
-        $data['requests'] = array_values(array_filter($data['requests'], function ($time) use ($now, $timeWindow) {
-            return $time > ($now - $timeWindow);
-        }));
-
-        if (count($data['requests']) >= $maxRequests) {
-            // Calculate when the oldest request in window expires
-            $oldestInWindow = min($data['requests']);
-            $retryAfter = ($oldestInWindow + $timeWindow) - $now;
-            $remaining = 0;
-            return ['limited' => true, 'retry_after' => max(1, $retryAfter), 'remaining' => $remaining];
-        }
-
-        $data['requests'][] = $now;
-    } else {
-        $data = ['requests' => [$now]];
+    // Atomic read-modify-write with exclusive lock
+    $fp = @fopen($file, 'c+');
+    if (!$fp) {
+        // Can't acquire file handle — allow request to proceed
+        return ['limited' => false, 'remaining' => $maxRequests];
     }
 
-    @file_put_contents($file, json_encode($data));
+    flock($fp, LOCK_EX);
+
+    $raw = stream_get_contents($fp);
+    $data = $raw ? json_decode($raw, true) : [];
+
+    // Guard against corrupt JSON
+    if (!is_array($data) || !isset($data['requests'])) {
+        $data = ['requests' => []];
+    }
+
+    // Clean old requests
+    $data['requests'] = array_values(array_filter($data['requests'], function ($time) use ($now, $timeWindow) {
+        return $time > ($now - $timeWindow);
+    }));
+
+    if (count($data['requests']) >= $maxRequests) {
+        $oldestInWindow = min($data['requests']);
+        $retryAfter = ($oldestInWindow + $timeWindow) - $now;
+
+        flock($fp, LOCK_UN);
+        fclose($fp);
+
+        return ['limited' => true, 'retry_after' => max(1, $retryAfter), 'remaining' => 0];
+    }
+
+    $data['requests'][] = $now;
+
+    // Truncate + rewind before write to prevent leftover data
+    ftruncate($fp, 0);
+    rewind($fp);
+    fwrite($fp, json_encode($data));
+    fflush($fp);
+
+    flock($fp, LOCK_UN);
+    fclose($fp);
+
     $remaining = $maxRequests - count($data['requests']);
     return ['limited' => false, 'remaining' => $remaining];
 }

@@ -76,15 +76,10 @@ class WhoisService
             return $result;
         }
 
-        return $this->cache->get($cacheKey, function() use ($punycodeDomain, $tld, $effectiveTld, $originalDomain, $cacheKey, $isIP) {
-            $result = $isIP ? $this->executeIpLookupFlow($originalDomain) : $this->executeLookupFlow($punycodeDomain, $tld, $originalDomain, $effectiveTld);
-            if ($result['success']) {
-                $this->cache->set($cacheKey, $result, 3600); // Base 1 hour TTL
-            } else {
-                $this->cache->setNegative($cacheKey, 300); // 5 min retry block
-            }
-            return $result;
-        });
+        // Cache-ignorant callback: just returns data, Cache handles storage.
+        return $this->cache->get($cacheKey, function() use ($punycodeDomain, $tld, $effectiveTld, $originalDomain, $isIP) {
+            return $isIP ? $this->executeIpLookupFlow($originalDomain) : $this->executeLookupFlow($punycodeDomain, $tld, $originalDomain, $effectiveTld);
+        }, 3600, 300);
     }
 
     private function executeIpLookupFlow($ip)
@@ -282,9 +277,11 @@ class WhoisService
             try {
                 $rdapResult = $this->rdapClient->query($domain);
                 $rdapData = RdapParser::parse($rdapResult);
-                $rawText = json_encode($rdapResult);
-                $usedServer = 'rdap.org';
-                Metrics::record('rdap_preferred_hit', "$domain (tld: $tld)");
+                if ($rdapData) {
+                    $rawText = json_encode($rdapResult);
+                    $usedServer = 'rdap.org';
+                    Metrics::record('rdap_preferred_hit', "$domain (tld: $tld)");
+                }
             } catch (\Exception $e) {
                 // Fallback will trigger below
                 Metrics::record('rdap_priority_failed_fallback_whois', $domain);
@@ -309,8 +306,10 @@ class WhoisService
                         try {
                             $rdapResult = $this->rdapClient->query($domain, $server);
                             $rdapData = RdapParser::parse($rdapResult);
-                            $rawText = json_encode($rdapResult);
-                            $usedServer = $server;
+                            if ($rdapData) {
+                                $rawText = json_encode($rdapResult);
+                                $usedServer = $server;
+                            }
                             break; // Successfully got it via RDAP fallback instead of Port 43
                         } catch (\Exception $e) {
                             break;
@@ -344,8 +343,10 @@ class WhoisService
                     try {
                         $rdapResult = $this->rdapClient->query($domain);
                         $rdapData = RdapParser::parse($rdapResult);
-                        $rawText = json_encode($rdapResult);
-                        $usedServer = 'rdap.org';
+                        if ($rdapData) {
+                            $rawText = json_encode($rdapResult);
+                            $usedServer = 'rdap.org';
+                        }
 
                         // WHOIS returned junk but RDAP worked — learn this TLD preference!
                         $this->learnRdapPreference($tld);
@@ -359,8 +360,10 @@ class WhoisService
                     try {
                         $rdapResult = $this->rdapClient->query($domain);
                         $rdapData = RdapParser::parse($rdapResult);
-                        $rawText = json_encode($rdapResult);
-                        $usedServer = 'rdap.org';
+                        if ($rdapData) {
+                            $rawText = json_encode($rdapResult);
+                            $usedServer = 'rdap.org';
+                        }
 
                         // WHOIS failed but RDAP worked — learn this TLD preference!
                         $this->learnRdapPreference($tld);

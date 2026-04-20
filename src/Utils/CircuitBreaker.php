@@ -56,8 +56,14 @@ class CircuitBreaker
         $content = @file_get_contents($file);
         if ($content) {
             $data = json_decode($content, true);
-            if (isset($data['banned_until']) && time() < $data['banned_until']) {
-                return false;
+            if (isset($data['banned_until']) && $data['banned_until'] > 0) {
+                if (time() < $data['banned_until']) {
+                    return false;
+                }
+                // Cooldown expired — reset state deterministically (not unlink)
+                $data['failures'] = [];
+                $data['banned_until'] = 0;
+                @file_put_contents($file, json_encode($data));
             }
         }
         

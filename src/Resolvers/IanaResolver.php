@@ -18,15 +18,14 @@ class IanaResolver
         $tld = strtolower($tld);
         $cacheKey = 'iana_tld_' . $tld;
 
-        // Try to get from SWR Cache (TTL 7 days)
-        return $this->cache->get($cacheKey, function() use ($tld, $cacheKey) {
+        // Cache-ignorant callback: just returns the server string.
+        // Cache handles TTL (7 days) and negative cache (10 min).
+        return $this->cache->get($cacheKey, function() use ($tld) {
             
             // 1. Try whois.iana.org
             $server = $this->queryIanaWhois($tld);
             if ($server) {
                 Metrics::record('iana_discovery_whois', $tld);
-                // Save it for 7 days
-                $this->cache->set($cacheKey, $server, 86400 * 7);
                 return $server;
             }
 
@@ -34,14 +33,12 @@ class IanaResolver
             $server = $this->queryIanaRdapBootstrap($tld);
             if ($server) {
                 Metrics::record('iana_discovery_rdap', $tld);
-                $this->cache->set($cacheKey, $server, 86400 * 7);
                 return $server;
             }
 
-            // Fallback failure negative cache
-            $this->cache->setNegative($cacheKey, 600);
+            // Both failed — return null (Cache will setNegative)
             return null;
-        });
+        }, 86400 * 7, 600);
     }
 
     private function queryIanaWhois($tld)
@@ -50,10 +47,22 @@ class IanaResolver
         $fp = @fsockopen('whois.iana.org', 43, $errno, $errstr, $timeout);
         if (!$fp) return null;
 
+        // BUG-C2 FIX: Set stream read timeout to prevent infinite hang
+        stream_set_timeout($fp, $timeout);
+
         fwrite($fp, $tld . "\r\n");
         $response = '';
         while (!feof($fp)) {
-            $response .= fgets($fp, 128);
+            $chunk = fgets($fp, 128);
+            if ($chunk !== false) {
+                $response .= $chunk;
+            }
+            // BUG-C2 FIX: Check for stream timeout inside loop
+            $meta = stream_get_meta_data($fp);
+            if ($meta['timed_out']) {
+                fclose($fp);
+                return null;
+            }
         }
         fclose($fp);
 
@@ -72,21 +81,22 @@ class IanaResolver
         $bootstrapUrl = 'https://data.iana.org/rdap/dns.json';
         $cacheKey = 'iana_rdap_bootstrap';
         
-        $data = $this->cache->get($cacheKey, function() use ($bootstrapUrl, $cacheKey) {
+        // Cache-ignorant callback for bootstrap data
+        $data = $this->cache->get($cacheKey, function() use ($bootstrapUrl) {
             $ch = curl_init($bootstrapUrl);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_TIMEOUT, 10);
             $response = curl_exec($ch);
+            curl_close($ch);
             
             if ($response) {
                 $json = json_decode($response, true);
                 if (isset($json['services'])) {
-                    $this->cache->set($cacheKey, $json, 86400 * 30); // 30 days
                     return $json;
                 }
             }
             return null;
-        });
+        }, 86400 * 30, 600);
 
         if ($data && isset($data['services'])) {
             foreach ($data['services'] as $serviceBlock) {

@@ -30,36 +30,34 @@ class GeoIpClient
     {
         $cacheKey = 'geoip_' . $ip;
 
-        // Check cache first
+        // Cache-ignorant callback: just returns geo data.
+        // Cache handles TTL (24h) and negative cache (5 min).
         try {
-            $cached = $this->cache->get($cacheKey);
-            if ($cached) return $cached;
+            return $this->cache->get($cacheKey, function() use ($ip) {
+                // Try primary provider
+                $data = $this->queryIpApi($ip);
+
+                // Fallback
+                if (!$data) {
+                    Metrics::record('geoip_primary_failed', $ip);
+                    $data = $this->queryIpWhoIs($ip);
+                }
+
+                return $data; // null if both failed → Cache will setNegative
+            }, self::CACHE_TTL, 300);
         } catch (\Exception $e) {
             // Negative cache hit — skip
             return null;
         }
-
-        // Try primary provider
-        $data = $this->queryIpApi($ip);
-
-        // Fallback
-        if (!$data) {
-            Metrics::record('geoip_primary_failed', $ip);
-            $data = $this->queryIpWhoIs($ip);
-        }
-
-        if ($data) {
-            $this->cache->set($cacheKey, $data, self::CACHE_TTL);
-        } else {
-            // Cache failure for 5 minutes to avoid hammering
-            $this->cache->setNegative($cacheKey, 300);
-        }
-
-        return $data;
     }
 
     /**
      * Primary: ip-api.com
+     * 
+     * NOTE: ip-api.com free tier only supports HTTP (not HTTPS).
+     * This means GeoIP responses are transmitted in plaintext between
+     * this server and ip-api.com. This is a known limitation of the free tier.
+     * If MITM protection is required, upgrade to ip-api.com Pro (HTTPS).
      */
     private function queryIpApi($ip)
     {
