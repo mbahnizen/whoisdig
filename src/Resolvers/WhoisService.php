@@ -261,6 +261,33 @@ class WhoisService
     }
 
     /**
+     * Build a standardized "domain not found / available" response.
+     * Used when an authoritative RDAP server returns 404.
+     */
+    private function buildNotFoundResponse($domain, $originalDomain, $rdapData, $tld, $effectiveTld)
+    {
+        return [
+            'success' => true,
+            'domain' => $originalDomain,
+            'punycode' => $domain,
+            'whois_server' => $rdapData['_server'] ?? 'N/A',
+            'registrar' => 'N/A',
+            'created_date' => 'N/A',
+            'expiry_date' => 'N/A',
+            'updated_date' => 'N/A',
+            'status' => ['not found'],
+            'nameservers' => [],
+            'raw' => base64_encode($rdapData['_raw'] ?? ''),
+            'created' => 'N/A',
+            'expires' => 'N/A',
+            'updated' => 'N/A',
+            'tld' => $effectiveTld ?: $tld,
+            'lifecycle' => null,
+            'available' => true,
+        ];
+    }
+
+    /**
      * RDAP Discovery Chain: Tries multiple RDAP sources in priority order.
      * 
      * Order:
@@ -269,6 +296,11 @@ class WhoisService
      * 
      * Returns parsed RDAP data with '_raw' and '_server' metadata keys,
      * or null if all sources fail.
+     * 
+     * IMPORTANT: If an authoritative server (IANA Bootstrap) returns 404,
+     * that is a DEFINITIVE answer (domain not registered). We return a 
+     * special '_not_found' marker so the caller can handle it correctly
+     * instead of cascading through fallback sources.
      */
     private function tryRdapDiscoveryChain($domain, $tld)
     {
@@ -277,15 +309,29 @@ class WhoisService
         // 1. Official IANA RDAP Bootstrap (highest priority)
         $ianaRdap = $this->iana->getRdapServer($tld);
         if ($ianaRdap && IanaResolver::isRdapUrl($ianaRdap)) {
-            $sources[] = $ianaRdap;
+            $sources[] = ['url' => $ianaRdap, 'authoritative' => true];
         }
 
         // 2. rdap.org community proxy (last resort)
-        $sources[] = 'https://rdap.org/';
+        $sources[] = ['url' => 'https://rdap.org/', 'authoritative' => false];
 
-        foreach ($sources as $server) {
+        foreach ($sources as $source) {
+            $server = $source['url'];
+            $isAuthoritative = $source['authoritative'];
+
             try {
                 $rdapResult = $this->rdapClient->query($domain, $server);
+
+                // Check for authoritative 404: domain definitively not registered
+                if ($isAuthoritative && isset($rdapResult['errorCode']) && $rdapResult['errorCode'] === 404) {
+                    Metrics::record('rdap_authoritative_not_found', "Server: $server | Domain: $domain");
+                    return [
+                        '_not_found' => true,
+                        '_raw' => json_encode($rdapResult),
+                        '_server' => $server,
+                    ];
+                }
+
                 $parsed = RdapParser::parse($rdapResult);
                 if ($parsed) {
                     $parsed['_raw'] = json_encode($rdapResult);
@@ -320,6 +366,11 @@ class WhoisService
         if ($preferRdap) {
             $rdapData = $this->tryRdapDiscoveryChain($domain, $tld);
             if ($rdapData) {
+                // Authoritative 404: domain definitively not registered
+                if (!empty($rdapData['_not_found'])) {
+                    return $this->buildNotFoundResponse($domain, $originalDomain, $rdapData, $tld, $effectiveTld);
+                }
+
                 $rawText = $rdapData['_raw'];
                 $usedServer = $rdapData['_server'];
                 unset($rdapData['_raw'], $rdapData['_server']);
@@ -340,6 +391,9 @@ class WhoisService
                     // Attempt RDAP discovery as fallback
                     $rdapFallback = $this->tryRdapDiscoveryChain($domain, $tld);
                     if ($rdapFallback) {
+                        if (!empty($rdapFallback['_not_found'])) {
+                            return $this->buildNotFoundResponse($domain, $originalDomain, $rdapFallback, $tld, $effectiveTld);
+                        }
                         $rawText = $rdapFallback['_raw'];
                         $usedServer = $rdapFallback['_server'];
                         $rdapData = $rdapFallback;
@@ -396,6 +450,9 @@ class WhoisService
                         Metrics::record('whois_empty_fallback_rdap', "$domain (tld: $tld)");
                         $rdapFallback = $this->tryRdapDiscoveryChain($domain, $tld);
                         if ($rdapFallback) {
+                            if (!empty($rdapFallback['_not_found'])) {
+                                return $this->buildNotFoundResponse($domain, $originalDomain, $rdapFallback, $tld, $effectiveTld);
+                            }
                             $rawText = $rdapFallback['_raw'];
                             $usedServer = $rdapFallback['_server'];
                             $rdapData = $rdapFallback;
@@ -409,6 +466,9 @@ class WhoisService
                     Metrics::record('whois_failed_fallback_rdap', $domain);
                     $rdapFallback = $this->tryRdapDiscoveryChain($domain, $tld);
                     if ($rdapFallback) {
+                        if (!empty($rdapFallback['_not_found'])) {
+                            return $this->buildNotFoundResponse($domain, $originalDomain, $rdapFallback, $tld, $effectiveTld);
+                        }
                         $rawText = $rdapFallback['_raw'];
                         $usedServer = $rdapFallback['_server'];
                         $rdapData = $rdapFallback;
