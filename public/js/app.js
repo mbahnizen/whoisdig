@@ -298,12 +298,15 @@ function createWhoisCard(data) {
     const nsArr = Array.isArray(data.nameservers) ? data.nameservers : [];
     const rawStatuses = Array.isArray(data.status) ? data.status : [];
     const statusStr = rawStatuses.join(' ').toLowerCase();
-    const isRegistered = registrar || created || nsArr.length > 0 || rawStatuses.length > 0;
+
+    // Backend explicitly marks unregistered domains with available=true
+    const isAvailable = data.available === true || statusStr === 'not found';
+    const isRegistered = !isAvailable && (registrar || created || nsArr.length > 0 || rawStatuses.length > 0);
 
     // Status analysis
     const badges = [];
 
-    if (!isRegistered) {
+    if (isAvailable || !isRegistered) {
         badges.push({ label: 'Available', cls: 'badge-emerald', icon: 'check-circle' });
         div.setAttribute('data-status', 'available');
     } else {
