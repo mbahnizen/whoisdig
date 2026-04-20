@@ -13,8 +13,18 @@ class RdapClient
         $this->circuitBreaker = $cb;
     }
 
-    public function query($domain, $rdapServer = 'https://rdap.org/domain/')
+    public function query($domain, $rdapServer = null)
     {
+        // Default fallback: rdap.org (last resort only)
+        if (!$rdapServer) {
+            $rdapServer = 'https://rdap.org/';
+        }
+
+        // Protocol safety: RDAP client must ONLY receive HTTP(S) URLs
+        if (strpos($rdapServer, 'http://') !== 0 && strpos($rdapServer, 'https://') !== 0) {
+            throw new \Exception("RdapClient received non-HTTP value: $rdapServer");
+        }
+
         // If it's the raw rdap.org, we trust it, else check circuit breaker
         $host = parse_url($rdapServer, PHP_URL_HOST);
         if ($host && !$this->circuitBreaker->isAvailable($host)) {
@@ -43,7 +53,7 @@ class RdapClient
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 3); // Fast timeout for quick fallback
         
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);

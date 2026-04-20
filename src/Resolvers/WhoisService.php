@@ -260,6 +260,47 @@ class WhoisService
             && ($expiry === 'N/A' || $expiry === '');
     }
 
+    /**
+     * RDAP Discovery Chain: Tries multiple RDAP sources in priority order.
+     * 
+     * Order:
+     *   1. IANA RDAP Bootstrap (official, e.g. https://pubapi.registry.google/rdap/)
+     *   2. rdap.org (community proxy, last resort)
+     * 
+     * Returns parsed RDAP data with '_raw' and '_server' metadata keys,
+     * or null if all sources fail.
+     */
+    private function tryRdapDiscoveryChain($domain, $tld)
+    {
+        $sources = [];
+
+        // 1. Official IANA RDAP Bootstrap (highest priority)
+        $ianaRdap = $this->iana->getRdapServer($tld);
+        if ($ianaRdap && IanaResolver::isRdapUrl($ianaRdap)) {
+            $sources[] = $ianaRdap;
+        }
+
+        // 2. rdap.org community proxy (last resort)
+        $sources[] = 'https://rdap.org/';
+
+        foreach ($sources as $server) {
+            try {
+                $rdapResult = $this->rdapClient->query($domain, $server);
+                $parsed = RdapParser::parse($rdapResult);
+                if ($parsed) {
+                    $parsed['_raw'] = json_encode($rdapResult);
+                    $parsed['_server'] = $server;
+                    return $parsed;
+                }
+            } catch (\Exception $e) {
+                Metrics::record('rdap_chain_failed', "Server: $server | Domain: $domain | Err: " . $e->getMessage());
+                continue; // Try next source
+            }
+        }
+
+        return null; // All RDAP sources exhausted
+    }
+
     private function executeLookupFlow($domain, $tld, $originalDomain, $effectiveTld = null)
     {
         // Static list of TLDs known to prioritize RDAP
@@ -273,101 +314,107 @@ class WhoisService
         $rawText = '';
         $usedServer = '';
 
+        // ============================================================
+        // RDAP-First Path: Dynamic discovery via IANA Bootstrap
+        // ============================================================
         if ($preferRdap) {
-            try {
-                $rdapResult = $this->rdapClient->query($domain);
-                $rdapData = RdapParser::parse($rdapResult);
-                if ($rdapData) {
-                    $rawText = json_encode($rdapResult);
-                    $usedServer = 'rdap.org';
-                    Metrics::record('rdap_preferred_hit', "$domain (tld: $tld)");
-                }
-            } catch (\Exception $e) {
-                // Fallback will trigger below
-                Metrics::record('rdap_priority_failed_fallback_whois', $domain);
+            $rdapData = $this->tryRdapDiscoveryChain($domain, $tld);
+            if ($rdapData) {
+                $rawText = $rdapData['_raw'];
+                $usedServer = $rdapData['_server'];
+                unset($rdapData['_raw'], $rdapData['_server']);
+                Metrics::record('rdap_preferred_hit', "$domain (tld: $tld)");
             }
         }
 
+        // ============================================================
+        // WHOIS Path: Only if RDAP didn't produce data
+        // ============================================================
         if (!$rdapData) {
             try {
-                // Determine Root WHOIS Server
+                // Determine Root WHOIS Server (protocol-validated)
                 $server = $this->iana->getWhoisServer($tld);
-                if (!$server) {
-                    // Fallbacks for common missing ones or complete failure
-                    $server = 'whois.iana.org';
+
+                // If no valid WHOIS server found, try RDAP bootstrap before giving up
+                if (!$server || !IanaResolver::isWhoisHost($server)) {
+                    // Attempt RDAP discovery as fallback
+                    $rdapFallback = $this->tryRdapDiscoveryChain($domain, $tld);
+                    if ($rdapFallback) {
+                        $rawText = $rdapFallback['_raw'];
+                        $usedServer = $rdapFallback['_server'];
+                        $rdapData = $rdapFallback;
+                        unset($rdapData['_raw'], $rdapData['_server']);
+                    } else {
+                        $server = 'whois.iana.org'; // Ultimate fallback
+                    }
                 }
 
-                // Referential Chaining (Max depth: 2)
-                $depth = 0;
-                $maxDepth = 2;
-                
-                while ($depth <= $maxDepth) {
-                    if (strpos($server, 'http://') === 0 || strpos($server, 'https://') === 0) {
-                        try {
-                            $rdapResult = $this->rdapClient->query($domain, $server);
-                            $rdapData = RdapParser::parse($rdapResult);
-                            if ($rdapData) {
-                                $rawText = json_encode($rdapResult);
-                                $usedServer = $server;
+                // Only proceed with WHOIS TCP if we have a valid hostname and no RDAP data
+                if (!$rdapData && $server && IanaResolver::isWhoisHost($server)) {
+                    // Referential Chaining (Max depth: 2)
+                    $depth = 0;
+                    $maxDepth = 2;
+                    
+                    while ($depth <= $maxDepth) {
+                        // PROTOCOL GUARD: Never pass a URL into the WHOIS TCP client
+                        if (IanaResolver::isRdapUrl($server)) {
+                            try {
+                                $rdapResult = $this->rdapClient->query($domain, $server);
+                                $rdapData = RdapParser::parse($rdapResult);
+                                if ($rdapData) {
+                                    $rawText = json_encode($rdapResult);
+                                    $usedServer = $server;
+                                }
+                                break;
+                            } catch (\Exception $e) {
+                                break;
                             }
-                            break; // Successfully got it via RDAP fallback instead of Port 43
-                        } catch (\Exception $e) {
+                        }
+
+                        $rawText = $this->whoisClient->query($domain, $server);
+                        $usedServer = $server;
+                        
+                        // Specific logic for registry returning "No match" inside a large referral setup string
+                        if (stripos($rawText, 'No match for') !== false && $depth > 0) {
+                            break; 
+                        }
+
+                        $referral = ReferralParser::extractServer($rawText);
+                        if ($referral && $referral !== $server) {
+                            $server = $referral;
+                            $depth++;
+                        } else {
                             break;
                         }
                     }
 
-                    $rawText = $this->whoisClient->query($domain, $server);
-                    $usedServer = $server;
+                    $whoisData = WhoisParser::parse($rawText);
                     
-                    // Specific logic for registry returning "No match" inside a large referral setup string
-                    if (stripos($rawText, 'No match for') !== false && $depth > 0) {
-                        break; 
-                    }
-
-                    $referral = ReferralParser::extractServer($rawText);
-                    if ($referral && $referral !== $server) {
-                        $server = $referral;
-                        $depth++;
-                    } else {
-                        break;
-                    }
-                }
-
-                $whoisData = WhoisParser::parse($rawText);
-                
-                // If the WHOIS parser found nothing valid (no registrar, no dates),
-                // try RDAP fallback. This commonly happens with .id and similar TLDs
-                // where WHOIS responds but with empty/useless data.
-                if (!$rdapData && $this->isWhoisDataEmpty($whoisData)) {
-                    Metrics::record('whois_empty_fallback_rdap', "$domain (tld: $tld)");
-                    try {
-                        $rdapResult = $this->rdapClient->query($domain);
-                        $rdapData = RdapParser::parse($rdapResult);
-                        if ($rdapData) {
-                            $rawText = json_encode($rdapResult);
-                            $usedServer = 'rdap.org';
+                    // If the WHOIS parser found nothing valid (no registrar, no dates),
+                    // try RDAP fallback via discovery chain.
+                    if (!$rdapData && $this->isWhoisDataEmpty($whoisData)) {
+                        Metrics::record('whois_empty_fallback_rdap', "$domain (tld: $tld)");
+                        $rdapFallback = $this->tryRdapDiscoveryChain($domain, $tld);
+                        if ($rdapFallback) {
+                            $rawText = $rdapFallback['_raw'];
+                            $usedServer = $rdapFallback['_server'];
+                            $rdapData = $rdapFallback;
+                            unset($rdapData['_raw'], $rdapData['_server']);
+                            $this->learnRdapPreference($tld);
                         }
-
-                        // WHOIS returned junk but RDAP worked — learn this TLD preference!
-                        $this->learnRdapPreference($tld);
-                    } catch (\Exception $e) {
-                        // RDAP also failed, continue with whatever WHOIS gave us
                     }
                 }
             } catch (\Exception $e) {
                 if (!$preferRdap) {
                     Metrics::record('whois_failed_fallback_rdap', $domain);
-                    try {
-                        $rdapResult = $this->rdapClient->query($domain);
-                        $rdapData = RdapParser::parse($rdapResult);
-                        if ($rdapData) {
-                            $rawText = json_encode($rdapResult);
-                            $usedServer = 'rdap.org';
-                        }
-
-                        // WHOIS failed but RDAP worked — learn this TLD preference!
+                    $rdapFallback = $this->tryRdapDiscoveryChain($domain, $tld);
+                    if ($rdapFallback) {
+                        $rawText = $rdapFallback['_raw'];
+                        $usedServer = $rdapFallback['_server'];
+                        $rdapData = $rdapFallback;
+                        unset($rdapData['_raw'], $rdapData['_server']);
                         $this->learnRdapPreference($tld);
-                    } catch (\Exception $e2) {
+                    } else {
                         return [
                             'success' => false,
                             'error' => "All resolution methods failed (WHOIS + RDAP).",
