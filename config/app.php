@@ -12,9 +12,10 @@ spl_autoload_register(function ($class) {
 
 define('MAX_DOMAINS_BULK', 500);
 define('MAX_FILE_SIZE', 5 * 1024 * 1024); // 5MB
-define('UPLOAD_DIR', __DIR__ . '/../storage/uploads/');
-define('LOG_DIR', __DIR__ . '/../storage/logs/');
-define('CACHE_DIR', __DIR__ . '/../storage/cache/');
+$baseStorageDir = defined('TEST_STORAGE_DIR') ? TEST_STORAGE_DIR : __DIR__ . '/../storage/';
+define('UPLOAD_DIR', $baseStorageDir . 'uploads/');
+define('LOG_DIR', $baseStorageDir . 'logs/');
+define('CACHE_DIR', $baseStorageDir . 'cache/');
 
 // Ensure storage directories exist (crucial for Wasmer Edge persistent volumes)
 foreach ([UPLOAD_DIR, LOG_DIR, CACHE_DIR] as $dir) {
@@ -80,9 +81,15 @@ function checkRateLimit($identifier, $maxRequests = 120, $timeWindow = 3600)
     }
 
     // Atomic read-modify-write with exclusive lock
-    $fp = @fopen($file, 'c+');
+    $fp = false;
+    for ($i = 0; $i < 100; $i++) {
+        $fp = @fopen($file, 'c+');
+        if ($fp) break;
+        usleep(50000); // 50ms backoff
+    }
+
     if (!$fp) {
-        // Can't acquire file handle — allow request to proceed
+        // Can't acquire file handle after retries — allow request to proceed (fail-open)
         return ['limited' => false, 'remaining' => $maxRequests];
     }
 

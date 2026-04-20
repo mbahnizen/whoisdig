@@ -10,13 +10,14 @@ class CircuitBreaker
 
     public function __construct($threshold = 5, $timeWindow = 60, $cooldown = 300)
     {
-        $this->logDir = __DIR__ . '/../../storage/logs/';
+        $baseDir = defined('TEST_STORAGE_DIR') ? TEST_STORAGE_DIR : __DIR__ . '/../../storage/';
+        $this->logDir = $baseDir . 'logs/';
         $this->threshold = $threshold; // Max failures
         $this->timeWindow = $timeWindow; // Window to count failures (seconds)
         $this->cooldown = $cooldown; // How long to ban (seconds)
         
         if (!is_dir($this->logDir)) {
-            mkdir($this->logDir, 0755, true);
+            @mkdir($this->logDir, 0755, true);
         }
     }
 

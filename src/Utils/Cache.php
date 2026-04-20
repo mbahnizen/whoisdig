@@ -7,9 +7,11 @@ class Cache
     
     public function __construct()
     {
-        $this->cacheDir = __DIR__ . '/../../storage/cache/';
+        $baseDir = defined('TEST_STORAGE_DIR') ? TEST_STORAGE_DIR : __DIR__ . '/../../storage/';
+        $this->cacheDir = $baseDir . 'cache/';
+        
         if (!is_dir($this->cacheDir)) {
-            mkdir($this->cacheDir, 0755, true);
+            @mkdir($this->cacheDir, 0755, true);
         }
     }
 
@@ -34,7 +36,7 @@ class Cache
             'data' => $data
         ];
 
-        @file_put_contents($file, json_encode($payload));
+        @file_put_contents($file, json_encode($payload), LOCK_EX);
     }
 
     /**

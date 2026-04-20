@@ -3,15 +3,24 @@ namespace WhoisDig\Utils;
 
 class Metrics
 {
-    private static $logDir = __DIR__ . '/../../storage/logs/';
+    private static $logDir = null;
+
+    private static function getLogDir() {
+        if (self::$logDir === null) {
+            $baseDir = defined('TEST_STORAGE_DIR') ? TEST_STORAGE_DIR : __DIR__ . '/../../storage/';
+            self::$logDir = $baseDir . 'logs/';
+        }
+        return self::$logDir;
+    }
 
     public static function record($event, $context = '', $durationMs = 0)
     {
-        if (!is_dir(self::$logDir)) {
-            @mkdir(self::$logDir, 0755, true);
+        $dir = self::getLogDir();
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
         }
 
-        $file = self::$logDir . 'metrics_' . date('Y-m-d') . '.jsonl';
+        $file = $dir . 'metrics_' . date('Y-m-d') . '.jsonl';
         
         $payload = [
             'timestamp' => date('Y-m-d H:i:s'),
@@ -25,7 +34,7 @@ class Metrics
 
         // GC: 1% chance, delete metrics files older than 30 days
         if (rand(1, 100) === 1) {
-            $files = glob(self::$logDir . 'metrics_*.jsonl');
+            $files = glob($dir . 'metrics_*.jsonl');
             if ($files) {
                 $maxAge = time() - (30 * 86400);
                 $scanned = 0;
