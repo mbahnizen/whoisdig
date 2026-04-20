@@ -64,12 +64,11 @@ test("Rate Limiter - High Concurrency (20 Workers)", function() {
     @unlink($file);
 
     // Create a temporary worker script
-    // CRITICAL: Escape backslashes for Windows paths embedded in double-quoted PHP strings
-    $escapedStorageDir = str_replace('\\', '\\\\', TEST_STORAGE_DIR);
-    $escapedConfigPath = str_replace('\\', '\\\\', realpath(__DIR__ . '/../config/app.php'));
+    $normalizedStorageDir = \WhoisDig\Utils\SystemHelper::normalizePath(TEST_STORAGE_DIR);
+    $normalizedConfigPath = \WhoisDig\Utils\SystemHelper::normalizePath(realpath(__DIR__ . '/../config/app.php'));
     $workerCode = '<?php
-define("TEST_STORAGE_DIR", "' . $escapedStorageDir . '");
-require_once "' . $escapedConfigPath . '";
+define("TEST_STORAGE_DIR", "' . $normalizedStorageDir . '");
+require_once "' . $normalizedConfigPath . '";
 usleep(rand(1000, 50000));
 $res = checkRateLimit("' . $ip . '", 10, 60);
 echo json_encode($res);';
@@ -77,28 +76,19 @@ echo json_encode($res);';
     $workerFile = TEST_STORAGE_DIR . 'worker.php';
     file_put_contents($workerFile, $workerCode);
 
-    $processes = [];
-    $pipes = [];
     $numWorkers = 20;
+    $scripts = array_fill(0, $numWorkers, $workerFile);
 
-    for ($i = 0; $i < $numWorkers; $i++) {
-        $processes[$i] = proc_open('php ' . escapeshellarg($workerFile), [
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w']
-        ], $pipes[$i]);
-    }
+    require_once __DIR__ . '/ProcessRunner.php';
+    $results = \WhoisDig\Tests\ProcessRunner::runParallel($scripts, 15000);
 
     $allowedCount = 0;
     $limitedCount = 0;
 
-    for ($i = 0; $i < $numWorkers; $i++) {
-        $out = stream_get_contents($pipes[$i][1]);
-        fclose($pipes[$i][1]);
-        fclose($pipes[$i][2]);
-        proc_close($processes[$i]);
-
+    foreach ($results as $result) {
+        $out = $result['stdout'];
         $res = json_decode($out, true);
-        assertTrue(is_array($res), "Worker output must be valid JSON array. Got: $out");
+        assertTrue(is_array($res), "Worker output must be valid JSON array. Got: $out. Stderr: " . $result['stderr']);
 
         if ($res['limited']) {
             $limitedCount++;

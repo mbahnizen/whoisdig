@@ -8,6 +8,7 @@ class Cache
     public function __construct()
     {
         $baseDir = defined('TEST_STORAGE_DIR') ? TEST_STORAGE_DIR : __DIR__ . '/../../storage/';
+        $baseDir = SystemHelper::normalizePath($baseDir);
         $this->cacheDir = $baseDir . 'cache/';
         
         if (!is_dir($this->cacheDir)) {
@@ -36,7 +37,21 @@ class Cache
             'data' => $data
         ];
 
-        @file_put_contents($file, json_encode($payload), LOCK_EX);
+        $fp = SystemHelper::acquireLock($file, 'c+', 5000);
+        if ($fp) {
+            try {
+                ftruncate($fp, 0);
+                rewind($fp);
+                fwrite($fp, json_encode($payload));
+                fflush($fp);
+            } finally {
+                @flock($fp, LOCK_UN);
+                @fclose($fp);
+            }
+        } else {
+            // Fail open and write without lock if lock fails
+            @file_put_contents($file, json_encode($payload));
+        }
     }
 
     /**

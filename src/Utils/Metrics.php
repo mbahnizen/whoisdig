@@ -8,6 +8,7 @@ class Metrics
     private static function getLogDir() {
         if (self::$logDir === null) {
             $baseDir = defined('TEST_STORAGE_DIR') ? TEST_STORAGE_DIR : __DIR__ . '/../../storage/';
+            $baseDir = SystemHelper::normalizePath($baseDir);
             self::$logDir = $baseDir . 'logs/';
         }
         return self::$logDir;
