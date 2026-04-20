@@ -62,7 +62,18 @@ class WhoisService
         }
 
         if ($skipCache) {
-            return $isIP ? $this->executeIpLookupFlow($originalDomain) : $this->executeLookupFlow($punycodeDomain, $tld, $originalDomain, $effectiveTld);
+            $result = $isIP ? $this->executeIpLookupFlow($originalDomain) : $this->executeLookupFlow($punycodeDomain, $tld, $originalDomain, $effectiveTld);
+            
+            // Overwrite old cache with fresh data so all subsequent lookups
+            // (from any user/browser) see the updated result.
+            if ($result['success']) {
+                $this->cache->set($cacheKey, $result, 3600);
+            } else {
+                // Fresh lookup failed — delete stale cache to prevent serving outdated data
+                $this->cache->delete($cacheKey);
+            }
+            
+            return $result;
         }
 
         return $this->cache->get($cacheKey, function() use ($punycodeDomain, $tld, $effectiveTld, $originalDomain, $cacheKey, $isIP) {
