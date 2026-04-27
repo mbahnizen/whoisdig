@@ -425,7 +425,22 @@ class WhoisService
                             }
                         }
 
-                        $rawText = $this->whoisClient->query($domain, $server);
+                        // BUG-FIX: Catch referral chase failures (depth > 0) to preserve
+                        // valid registry data from the previous iteration. Without this,
+                        // an unreachable registrar WHOIS server (e.g. whois.webnic.cc)
+                        // would discard the valid registry response.
+                        try {
+                            $currentRaw = $this->whoisClient->query($domain, $server);
+                        } catch (\Exception $e) {
+                            if ($depth > 0) {
+                                // Referral target unreachable — keep registry data
+                                Metrics::record('whois_referral_chase_failed', "Server: $server | Domain: $domain | Err: " . $e->getMessage());
+                                break;
+                            }
+                            throw $e; // First attempt (registry) failed — propagate
+                        }
+
+                        $rawText = $currentRaw;
                         $usedServer = $server;
                         
                         // Specific logic for registry returning "No match" inside a large referral setup string
