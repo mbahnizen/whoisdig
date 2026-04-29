@@ -137,7 +137,7 @@ class Cache
 
     private function processPayload($data) {
         if (isset($data['_negative']) && $data['_negative'] === true) {
-            throw new \Exception("Negative cache hit."); // Handled by service
+            return null; // Return null to indicate "no data found" (cached failure)
         }
         return $data;
     }

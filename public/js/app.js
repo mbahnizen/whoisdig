@@ -306,6 +306,16 @@ function createWhoisCard(data) {
     // Status analysis
     const badges = [];
 
+    // Resolution Method Badge
+    if (data.resolution_method && data.resolution_method !== 'unknown') {
+        const isRdap = data.resolution_method === 'rdap';
+        badges.push({ 
+            label: isRdap ? 'RDAP' : 'WHOIS', 
+            cls: isRdap ? 'badge-emerald' : 'badge-orange', 
+            icon: isRdap ? 'lightning' : 'broadcast' 
+        });
+    }
+
     if (isAvailable || !isRegistered) {
         badges.push({ label: 'Available', cls: 'badge-emerald', icon: 'check-circle' });
         div.setAttribute('data-status', 'available');
@@ -480,6 +490,10 @@ function createIpCard(data) {
                 <span class="badge-purple text-[10px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                     <i class="ph-bold ph-network"></i>${data.ip_version === 'v6' ? 'IPv6' : 'IP Address'}
                 </span>
+                ${data.resolution_method && data.resolution_method !== 'unknown' ? `
+                <span class="${data.resolution_method === 'rdap' ? 'badge-emerald' : 'badge-orange'} text-[10px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1">
+                    <i class="ph-bold ph-${data.resolution_method === 'rdap' ? 'lightning' : 'broadcast'}"></i>${data.resolution_method.toUpperCase()}
+                </span>` : ''}
                 ${extraBadgesHtml}
                 ${countryFlag ? `<span class="text-sm" title="${countryName}">${countryFlag}</span>` : ''}
                 <i class="ph-bold ph-caret-down chevron text-slate-500 text-sm ml-1"></i>
