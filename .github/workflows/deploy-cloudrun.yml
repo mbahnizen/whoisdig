@@ -26,19 +26,23 @@ jobs:
         uses: actions/checkout@v4
 
       # ── Google Cloud Authentication ─────────────────────────────────────────
-      # Option A: Workload Identity Federation (Recommended)
-      # Set secrets.GCP_WIF_PROVIDER and secrets.GCP_WIF_SERVICE_ACCOUNT in GitHub.
-      #
-      # Option B: Service Account Key JSON
-      # Set secrets.GCP_SA_KEY with the JSON key content in GitHub.
+      # We authenticate using a GCP Service Account Key (simplest & most common).
+      # If you prefer Workload Identity Federation, swap this with the WIF configuration.
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
         with:
           token_format: access_token
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }} # Optional: Use WIF
-          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }} # Optional: Use WIF
-          credentials_json: ${{ secrets.GCP_SA_KEY }} # Optional: Use SA Key (Fallback)
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # To use Workload Identity Federation (WIF) instead, comment out the step above and use:
+      # - name: Authenticate to Google Cloud (WIF)
+      #   id: auth
+      #   uses: google-github-actions/auth@v2
+      #   with:
+      #     token_format: access_token
+      #     workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+      #     service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
 
       # ── Login to Artifact Registry ──────────────────────────────────────────
       - name: Log in to Google Artifact Registry
