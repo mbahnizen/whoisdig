@@ -158,6 +158,23 @@ html.light .tab-pill.active {
     color: #7c3aed;
 }
 
+/* ===== Component: Toast ===== */
+.copy-toast {
+    transform: translate(-50%, 0);
+    animation: toastRise 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes toastRise {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 10px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
 /* ===== Component: Chevron ===== */
 .chevron { transition: transform 0.25s; }
 .chevron.open { transform: rotate(180deg); }
@@ -170,6 +187,52 @@ html.light .tab-pill.active {
 .badge-orange { background: rgba(249,115,22,0.12); color: #fb923c; border: 1px solid rgba(249,115,22,0.2); }
 .badge-purple { background: rgba(168,85,247,0.12); color: #c084fc; border: 1px solid rgba(168,85,247,0.2); }
 .badge-slate { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }
+
+.badge-source-rdap {
+    background: rgba(20,184,166,0.09);
+    color: #5eead4;
+    border: 1px solid rgba(20,184,166,0.18);
+}
+.badge-source-whois {
+    background: rgba(251,146,60,0.09);
+    color: #fdba74;
+    border: 1px solid rgba(251,146,60,0.18);
+}
+.badge-status-available {
+    background: rgba(16,185,129,0.12);
+    color: #34d399;
+    border: 1px solid rgba(16,185,129,0.22);
+}
+.badge-status-inactive {
+    background: rgba(100,116,139,0.22);
+    color: #cbd5e1;
+    border: 1px solid rgba(148,163,184,0.32);
+}
+.badge-status-redemption {
+    background: rgba(245,158,11,0.16);
+    color: #fbbf24;
+    border: 1px solid rgba(245,158,11,0.32);
+}
+.badge-status-pending {
+    background: rgba(225,29,72,0.16);
+    color: #fb7185;
+    border: 1px solid rgba(225,29,72,0.34);
+}
+.badge-status-expired {
+    background: rgba(190,18,60,0.14);
+    color: #fda4af;
+    border: 1px solid rgba(190,18,60,0.3);
+}
+.badge-status-expiring {
+    background: rgba(234,179,8,0.14);
+    color: #fde047;
+    border: 1px solid rgba(234,179,8,0.28);
+}
+.badge-status-hold {
+    background: rgba(168,85,247,0.14);
+    color: #d8b4fe;
+    border: 1px solid rgba(168,85,247,0.28);
+}
 
 html.light .badge-emerald { background: rgba(16,185,129,0.08); color: #059669; border-color: rgba(16,185,129,0.15); }
 html.light .badge-blue { background: rgba(59,130,246,0.08); color: #2563eb; border-color: rgba(59,130,246,0.15); }
@@ -303,3 +366,97 @@ html.light .badge-red { background: rgba(232,132,154,0.08); color: #e8849a; bord
 html.light .badge-yellow { background: rgba(210,170,70,0.08); color: #c4a43e; border-color: rgba(210,170,70,0.12); }
 html.light .badge-orange { background: rgba(232,151,106,0.08); color: #d8874a; border-color: rgba(232,151,106,0.12); }
 
+html.light .badge-source-rdap { background: rgba(20,184,166,0.08); color: #0f766e; border-color: rgba(20,184,166,0.18); }
+html.light .badge-source-whois { background: rgba(251,146,60,0.08); color: #c2410c; border-color: rgba(251,146,60,0.16); }
+html.light .badge-status-available { background: rgba(16,185,129,0.08); color: #047857; border-color: rgba(16,185,129,0.18); }
+html.light .badge-status-inactive { background: rgba(100,116,139,0.1); color: #475569; border-color: rgba(100,116,139,0.18); }
+html.light .badge-status-redemption { background: rgba(245,158,11,0.1); color: #b45309; border-color: rgba(245,158,11,0.2); }
+html.light .badge-status-pending { background: rgba(225,29,72,0.09); color: #be123c; border-color: rgba(225,29,72,0.18); }
+html.light .badge-status-expired { background: rgba(190,18,60,0.08); color: #be123c; border-color: rgba(190,18,60,0.16); }
+html.light .badge-status-expiring { background: rgba(234,179,8,0.1); color: #a16207; border-color: rgba(234,179,8,0.18); }
+html.light .badge-status-hold { background: rgba(168,85,247,0.09); color: #7e22ce; border-color: rgba(168,85,247,0.18); }
+
+/* Light mode comfort pass: dim the canvas and restore readable contrast */
+html.light {
+    background: #e9edf3;
+}
+html.light body {
+    background:
+        radial-gradient(ellipse 70% 45% at 18% 0%, rgba(139,92,246,0.06), transparent 70%),
+        linear-gradient(180deg, #eef2f7 0%, #e7ebf2 100%);
+    color: #43526a;
+}
+html.light body::before {
+    background: none;
+}
+html.light .glass {
+    background: rgba(246, 248, 251, 0.88);
+    border-color: rgba(111, 126, 153, 0.18);
+    box-shadow: 0 12px 32px rgba(47, 58, 79, 0.08);
+}
+html.light .result-card {
+    background: rgba(243, 246, 250, 0.92);
+}
+html.light .result-card:hover {
+    border-color: rgba(139,92,246,0.18) !important;
+}
+html.light .bg-black\/15,
+html.light .bg-black\/20,
+html.light .bg-black\/30,
+html.light .bg-black\/40,
+html.light .bg-white\/5 {
+    background: rgba(226, 232, 240, 0.42) !important;
+}
+html.light .border-white\/5,
+html.light .border-white\/10 {
+    border-color: rgba(126, 142, 170, 0.2) !important;
+}
+html.light .text-white {
+    color: #263244 !important;
+}
+html.light .text-slate-200 {
+    color: #334155 !important;
+}
+html.light .text-slate-300 {
+    color: #52627a !important;
+}
+html.light .text-slate-400 {
+    color: #697991 !important;
+}
+html.light .text-slate-500 {
+    color: #8795aa !important;
+}
+html.light .font-mono.text-slate-300,
+html.light .font-mono.text-slate-400 {
+    color: #53647d !important;
+}
+html.light .input-field {
+    background: rgba(226, 232, 240, 0.5);
+    border-color: rgba(126, 142, 170, 0.24);
+    color: #334155;
+}
+html.light pre.text-emerald-400\/80 {
+    background: rgba(226, 232, 240, 0.5) !important;
+    border-color: rgba(126, 142, 170, 0.2) !important;
+}
+html.light .btn-primary,
+html.light button.btn-primary {
+    color: #ffffff !important;
+}
+html.light .text-emerald-300 {
+    color: #059669 !important;
+}
+html.light .text-emerald-400 {
+    color: #047857 !important;
+}
+html.light .badge-status-available {
+    background: rgba(5,150,105,0.14);
+    color: #047857;
+    border-color: rgba(5,150,105,0.28);
+}
+html.light .bg-emerald-500\/8 {
+    background: rgba(5,150,105,0.1) !important;
+}
+html.light .border-emerald-500\/20 {
+    border-color: rgba(5,150,105,0.26) !important;
+}

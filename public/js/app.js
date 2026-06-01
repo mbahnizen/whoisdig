@@ -298,67 +298,97 @@ function createWhoisCard(data) {
     const nsArr = Array.isArray(data.nameservers) ? data.nameservers : [];
     const rawStatuses = Array.isArray(data.status) ? data.status : [];
     const statusStr = rawStatuses.join(' ').toLowerCase();
+    const compactStatusStr = statusStr.replace(/\s+/g, '');
 
     // Backend explicitly marks unregistered domains with available=true
     const isAvailable = data.available === true || statusStr === 'not found';
     const isRegistered = !isAvailable && (registrar || created || nsArr.length > 0 || rawStatuses.length > 0);
+    const isInactive = isRegistered && nsArr.length === 0;
 
-    // Status analysis
-    const badges = [];
+    const attentionBadges = [];
+    const metaBadges = [];
 
     // Resolution Method Badge
     if (data.resolution_method && data.resolution_method !== 'unknown') {
         const isRdap = data.resolution_method === 'rdap';
-        badges.push({ 
+        metaBadges.push({
             label: isRdap ? 'RDAP' : 'WHOIS', 
-            cls: isRdap ? 'badge-emerald' : 'badge-orange', 
+            cls: isRdap ? 'badge-source-rdap' : 'badge-source-whois',
             icon: isRdap ? 'lightning' : 'broadcast' 
         });
     }
 
     if (isAvailable || !isRegistered) {
-        badges.push({ label: 'Available', cls: 'badge-emerald', icon: 'check-circle' });
+        attentionBadges.push({ label: 'Available', cls: 'badge-status-available', icon: 'check-circle' });
         div.setAttribute('data-status', 'available');
     } else {
-        badges.push({ label: 'Registered', cls: 'badge-blue', icon: 'identification-card' });
         div.setAttribute('data-status', 'registered');
-        if (statusStr.includes('redemptionperiod')) badges.push({ label: 'Redemption', cls: 'badge-orange', icon: 'clock-countdown' });
-        if (statusStr.includes('pendingdelete')) badges.push({ label: 'Pending Delete', cls: 'badge-red', icon: 'trash' });
-        if (statusStr.includes('clienthold') || statusStr.includes('serverhold')) badges.push({ label: 'On Hold', cls: 'badge-yellow', icon: 'hand-palm' });
+        if (isInactive) attentionBadges.push({ label: 'Inactive', cls: 'badge-status-inactive', icon: 'power', title: 'Registered domain without nameservers' });
+        const isRedemption = compactStatusStr.includes('redemptionperiod');
+        const isPendingDelete = !isRedemption && compactStatusStr.includes('pendingdelete');
+        if (isRedemption) attentionBadges.push({ label: 'Redemption', cls: 'badge-status-redemption', icon: 'clock-countdown' });
+        else if (isPendingDelete) attentionBadges.push({ label: 'Pending Delete', cls: 'badge-status-pending', icon: 'trash' });
+        if (compactStatusStr.includes('clienthold') || compactStatusStr.includes('serverhold')) attentionBadges.push({ label: 'On Hold', cls: 'badge-status-hold', icon: 'hand-palm' });
     }
 
     // Days left
-    let daysHtml = '';
+    let expiryBadge = null;
     if (data.lifecycle && data.lifecycle.days_until_expiry !== undefined) {
         const d = data.lifecycle.days_until_expiry;
-        if (d > 30) daysHtml = `<span class="badge-emerald text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1"><i class="ph-bold ph-shield-check"></i>${d}d</span>`;
-        else if (d > 0) daysHtml = `<span class="badge-yellow text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1"><i class="ph-bold ph-warning"></i>${d}d</span>`;
-        else daysHtml = `<span class="badge-red text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1"><i class="ph-bold ph-x-circle"></i>Expired</span>`;
+        if (d > 0 && d <= 30) expiryBadge = { label: `${d}d`, cls: 'badge-status-expiring', icon: 'warning', title: 'Expiring soon' };
+        else if (d <= 0 && !compactStatusStr.includes('redemptionperiod') && !compactStatusStr.includes('pendingdelete')) expiryBadge = { label: 'Expired', cls: 'badge-status-expired', icon: 'x-circle' };
     }
+    if (expiryBadge) attentionBadges.push(expiryBadge);
 
     const icon = isRegistered
         ? '<i class="ph-fill ph-identification-card text-blue-400 text-lg"></i>'
         : '<i class="ph-fill ph-check-circle text-emerald-400 text-lg"></i>';
 
-    const badgesHtml = badges.map(b => `<span class="${b.cls} text-[10px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1"><i class="ph-bold ph-${b.icon}"></i>${b.label}</span>`).join('');
+    const badgeHtml = b => `<span class="${b.cls} text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 flex-shrink-0" ${b.title ? `title="${escapeHtml(b.title)}"` : ''}><i class="ph-bold ph-${b.icon}"></i>${b.label}</span>`;
+    const attentionBadgesHtml = attentionBadges.map(badgeHtml).join('');
+    const metaBadgesHtml = metaBadges.map(badgeHtml).join('');
+    const sourceBadgesHtml = metaBadgesHtml;
+    const statusBadgesHtml = attentionBadgesHtml;
 
     const nsDisplay = nsArr.length > 2 ? nsArr.slice(0, 2).join(', ') + ` +${nsArr.length - 2}` : nsArr.join(', ');
-
-    div.innerHTML = `
-        <!-- Card Header -->
-        <div class="card-header p-3.5 md:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3" onclick="toggleCard(this.parentElement)">
-            <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                ${icon}
-                <span class="font-display font-bold text-white text-base md:text-lg truncate">${escapeHtml(data.domain)}</span>
-                ${daysHtml}
+    const nsSummaryHtml = nsArr.length > 0
+        ? escapeHtml(nsDisplay)
+        : isAvailable
+            ? '<span class="inline-flex items-center gap-1.5 text-emerald-300"><i class="ph-bold ph-check-circle text-emerald-400"></i>Not registered</span>'
+            : '<span class="inline-flex items-center gap-1.5 text-slate-400"><i class="ph-bold ph-power text-slate-500"></i>No nameservers</span>';
+    const nsDetailHtml = nsArr.length > 0
+        ? nsArr.map(ns => `<span class="text-[11px] font-mono bg-white/5 text-slate-300 px-2 py-1 rounded-lg border border-white/5">${escapeHtml(ns)}</span>`).join('')
+        : isAvailable
+            ? `<div class="w-full rounded-lg border border-emerald-500/20 bg-emerald-500/8 px-3 py-2 text-[11px] text-emerald-300 flex items-center gap-2">
+            <i class="ph-bold ph-check-circle text-emerald-400"></i>
+            <span>No nameservers because this domain is not registered yet.</span>
+        </div>`
+            : `<div class="w-full rounded-lg border border-slate-500/20 bg-slate-500/8 px-3 py-2 text-[11px] text-slate-400 flex items-center gap-2">
+            <i class="ph-bold ph-power text-slate-500"></i>
+            <span>No nameservers detected. This registered domain is currently inactive.</span>
+        </div>`;
+    const domainActionHtml = (isInactive || isAvailable)
+        ? `<button data-copy-value="${escapeHtml(data.domain)}" onclick="event.stopPropagation(); copyText(this.dataset.copyValue)" class="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 border border-white/5">
+            <i class="ph-bold ph-copy"></i> Copy Domain
+        </button>`
+        : `<a href="http://${escapeHtml(data.domain)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 border border-white/5">
+            <i class="ph-bold ph-arrow-square-out"></i> Visit
+        </a>`;
+    const availableSummaryHtml = `
+        <div class="summary-row px-4 md:px-5 pb-4 grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs" onclick="toggleCard(this.parentElement)">
+            <div class="collapse-col bg-emerald-500/8 p-3 rounded-xl border border-emerald-500/20 md:col-span-2">
+                <div class="text-emerald-400 font-semibold text-[10px] uppercase tracking-wider mb-1">Availability</div>
+                <div class="text-emerald-300 font-medium flex items-center gap-1.5">
+                    <i class="ph-bold ph-check-circle"></i>
+                    This domain is available to register.
+                </div>
             </div>
-            <div class="flex items-center gap-2">
-                <div class="flex flex-wrap gap-1.5">${badgesHtml}</div>
-                <i class="ph-bold ph-caret-down chevron text-slate-500 text-sm ml-1"></i>
+            <div class="collapse-col bg-black/15 p-3 rounded-xl border border-white/5">
+                <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-1">TLD</div>
+                <div class="text-slate-300 font-mono text-[11px] truncate">.${escapeHtml(data.tld || '-')}</div>
             </div>
-        </div>
-
-        <!-- Summary Row -->
+        </div>`;
+    const registeredSummaryHtml = `
         <div class="summary-row px-4 md:px-5 pb-4 grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs" onclick="toggleCard(this.parentElement)">
             <div class="collapse-col bg-black/15 p-3 rounded-xl border border-white/5">
                 <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-1">Registrar</div>
@@ -374,14 +404,90 @@ function createWhoisCard(data) {
             </div>
             <div class="collapse-col bg-black/15 p-3 rounded-xl border border-white/5 hidden md:block">
                 <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-1">Nameservers</div>
-                <div class="text-slate-300 font-mono text-[11px] truncate">${escapeHtml(nsDisplay) || '-'}</div>
+                <div class="text-slate-300 font-mono text-[11px] truncate">${nsSummaryHtml}</div>
+            </div>
+        </div>`;
+    const availableDetailHtml = `
+        <div class="px-4 md:px-5 pb-4 pt-1 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                ${detailCell('Status', rawStatuses[0] || 'not found', 'check-circle', 'text-emerald-400')}
+                ${detailCell('TLD', '.' + (data.tld || '-'), 'globe-hemisphere-east', 'text-slate-300')}
+                ${detailCell('Lookup Source', data.whois_server || data.resolution_method?.toUpperCase() || '-', 'hard-drives', 'text-slate-300')}
+            </div>
+            <div class="bg-emerald-500/8 p-3 rounded-xl border border-emerald-500/20">
+                <div class="text-emerald-400 font-semibold text-[10px] uppercase tracking-wider mb-2">Availability</div>
+                <div class="text-[12px] text-emerald-300 flex items-center gap-2">
+                    <i class="ph-bold ph-check-circle"></i>
+                    <span>No registration record was found for this domain.</span>
+                </div>
+            </div>
+            <div class="flex gap-2 pt-1">
+                ${domainActionHtml}
+            </div>
+        </div>`;
+    const registeredDetailHtml = `
+        <div class="px-4 md:px-5 pb-4 pt-1 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                ${detailCell('Created', formatDate(data.created), 'calendar-blank', 'text-accent')}
+                ${detailCell('Updated', formatDate(data.updated), 'clock-clockwise', 'text-slate-300')}
+                ${detailCell('Expiry', formatDate(data.expires), 'flag', 'text-pink-400')}
+                ${detailCell('Registrar', escapeHtml(data.registrar) || '-', 'buildings', 'text-slate-200')}
+                ${detailCell('WHOIS Server', data.whois_server || '-', 'hard-drives', 'text-slate-300')}
+                ${detailCell('TLD', '.' + (data.tld || '-'), 'globe-hemisphere-east', 'text-slate-300')}
+            </div>
+
+            <div class="bg-black/20 p-3 rounded-xl border border-white/5">
+                <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-2">Nameservers</div>
+                <div class="flex flex-wrap gap-1.5">
+                    ${nsDetailHtml}
+                </div>
+            </div>
+
+            <div class="bg-black/20 p-3 rounded-xl border border-white/5">
+                <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-2">Domain Status</div>
+                <div class="flex flex-wrap gap-1.5">
+                    ${rawStatuses.length > 0 ? rawStatuses.map(s => `<span class="text-[11px] font-mono bg-white/5 text-slate-400 px-2 py-1 rounded-lg border border-white/5">${escapeHtml(s)}</span>`).join('') : '<span class="text-slate-600 text-[11px]">—</span>'}
+                </div>
+            </div>
+
+            ${data.raw ? `
+            <details class="group">
+                <summary class="text-[10px] uppercase tracking-wider font-bold text-slate-500 cursor-pointer hover:text-slate-300 transition-colors flex items-center gap-1.5">
+                    <i class="ph ph-terminal"></i> Raw WHOIS Output
+                    <i class="ph ph-caret-down text-[10px] group-open:rotate-180 transition-transform"></i>
+                </summary>
+                <pre class="mt-2 bg-black/40 p-3 rounded-xl text-[11px] font-mono text-emerald-400/80 max-h-48 overflow-auto border border-white/5 whitespace-pre-wrap break-all">${escapeHtml(atob(data.raw))}</pre>
+            </details>` : ''}
+
+            <div class="flex gap-2 pt-1">
+                ${domainActionHtml}
+            </div>
+        </div>`;
+    const summaryHtml = isAvailable ? availableSummaryHtml : registeredSummaryHtml;
+    const detailBodyHtml = isAvailable ? availableDetailHtml : registeredDetailHtml;
+
+    div.innerHTML = `
+        <!-- Card Header -->
+        <div class="card-header p-3.5 md:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3" onclick="toggleCard(this.parentElement)">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                ${icon}
+                <span class="font-display font-bold text-white text-base md:text-lg truncate">${escapeHtml(data.domain)}</span>
+                ${sourceBadgesHtml}
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="flex flex-wrap gap-1.5 justify-end">${statusBadgesHtml}</div>
+                <i class="ph-bold ph-caret-down chevron text-slate-500 text-sm ml-1"></i>
             </div>
         </div>
+
+        <!-- Summary Row -->
+        ${summaryHtml}
 
         <!-- Expandable Detail Body -->
         <div class="card-body">
             <div>
-                <div class="px-4 md:px-5 pb-4 pt-1 border-t border-white/5 space-y-3">
+                ${isAvailable ? detailBodyHtml : ''}
+                <div class="${isAvailable ? 'hidden ' : ''}px-4 md:px-5 pb-4 pt-1 space-y-3">
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                         ${detailCell('Created', formatDate(data.created), 'calendar-blank', 'text-accent')}
                         ${detailCell('Updated', formatDate(data.updated), 'clock-clockwise', 'text-slate-300')}
@@ -394,7 +500,7 @@ function createWhoisCard(data) {
                     <div class="bg-black/20 p-3 rounded-xl border border-white/5">
                         <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-2">Nameservers</div>
                         <div class="flex flex-wrap gap-1.5">
-                            ${nsArr.length > 0 ? nsArr.map(ns => `<span class="text-[11px] font-mono bg-white/5 text-slate-300 px-2 py-1 rounded-lg border border-white/5">${escapeHtml(ns)}</span>`).join('') : '<span class="text-slate-600 text-[11px]">—</span>'}
+                            ${nsDetailHtml}
                         </div>
                     </div>
 
@@ -415,9 +521,7 @@ function createWhoisCard(data) {
                     </details>` : ''}
 
                     <div class="flex gap-2 pt-1">
-                        <a href="http://${escapeHtml(data.domain)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 border border-white/5">
-                            <i class="ph-bold ph-arrow-square-out"></i> Visit
-                        </a>
+                        ${domainActionHtml}
                     </div>
                 </div>
             </div>
@@ -832,7 +936,7 @@ function escapeHtml(str) {
 function copyText(text) {
     navigator.clipboard.writeText(text).then(() => {
         const toast = document.createElement('div');
-        toast.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 bg-accent text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg z-50 animate-slide-up';
+        toast.className = 'copy-toast fixed bottom-6 left-1/2 bg-accent text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg z-50';
         toast.textContent = 'Copied!';
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 1500);

@@ -235,6 +235,40 @@ wasmer app volume credentials <namespace>/whoisdig
 rclone ls edge-whoisdig:storage-volume/logs/ --s3-force-path-style=true
 ```
 
+### Deploy to Google Cloud Run (Docker)
+
+WHOISDIG can be run universally as a Docker container, which is fully compatible with **Google Cloud Run** (offering a generous free tier, fast auto-scaling, and complete outbound TCP port 43 access for WHOIS lookups).
+
+#### 1. Local Development (Docker Compose)
+To run the app locally using Docker:
+```bash
+docker compose up --build
+```
+This will start the server at `http://localhost:8080` and persist your cache and logs in Docker volumes.
+
+#### 2. Manual Deploy to Cloud Run
+Build and deploy manually using the Google Cloud SDK:
+```bash
+# Build and push the image to Google Artifact Registry
+gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/whoisdig
+
+# Deploy to Cloud Run
+gcloud run deploy whoisdig \
+  --image gcr.io/YOUR_PROJECT_ID/whoisdig \
+  --platform managed \
+  --region asia-southeast2 \
+  --allow-unauthenticated
+```
+
+#### 3. Continuous Deployment (CI/CD via GitHub Actions)
+This repository includes an automated workflow under `.github/workflows/deploy-cloudrun.yml`. 
+To configure auto-deploys on every `push` to `main`:
+1. In your GCP Console, enable the **Cloud Run API** and **Artifact Registry API**.
+2. Create an **Artifact Registry Docker Repository** named `whoisdig-repo`.
+3. In GitHub, go to your repository **Settings -> Secrets and variables -> Actions** and add:
+   - `GCP_PROJECT_ID`: Your GCP Project ID.
+   - `GCP_SA_KEY`: The JSON Key of a Service Account with role `Cloud Run Developer`, `Storage Admin` (for registry), and `Service Account User` (or set up Workload Identity Federation).
+
 ---
 
 ## 🏗️ Architecture
@@ -329,7 +363,7 @@ External WHOIS/RDAP servers can be unreliable. The circuit breaker:
 - [ ] WHOIS response diffing (track changes over time)
 - [ ] Webhook notifications for domain expiry
 - [ ] REST API authentication (API keys)
-- [ ] Docker image
+- [x] Docker image & Container support (with local `docker-compose` and Cloud Run deployment)
 - [ ] Export results (CSV / JSON)
 - [ ] Batch upload via file (CSV/TXT)
 

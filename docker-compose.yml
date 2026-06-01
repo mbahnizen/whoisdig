@@ -1,0 +1,28 @@
+# =============================================================================
+# WHOISDIG — Docker Compose (Local Development)
+# =============================================================================
+# Usage:
+#   docker compose up --build        → Build & start
+#   docker compose up -d             → Start in background
+#   docker compose down              → Stop & remove container
+#   docker compose down -v           → Stop & remove container + volumes
+# =============================================================================
+
+services:
+  whoisdig:
+    build: .
+    container_name: whoisdig
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist cache & logs across restarts (local dev only)
+      - whoisdig-cache:/app/storage/cache
+      - whoisdig-logs:/app/storage/logs
+    environment:
+      - PORT=8080
+      - WHOISDIG_CORS_ORIGIN=*
+    restart: unless-stopped
+
+volumes:
+  whoisdig-cache:
+  whoisdig-logs:

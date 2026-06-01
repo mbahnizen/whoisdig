@@ -1,0 +1,41 @@
+# =============================================================================
+# WHOISDIG — Docker Ignore
+# =============================================================================
+
+# Version control
+.git
+.gitignore
+
+# CI/CD
+.github
+
+# IDE / Editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Runtime data (rebuilt inside container)
+storage/cache/*
+storage/logs/*
+storage/uploads/*
+
+# Wasmer-specific (not needed for Docker)
+wasmer.toml
+app.yaml
+
+# Documentation & tests (not needed in production image)
+docs/
+tests/
+README.md
+CHANGELOG.md
+LICENSE
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment files (secrets should use env vars)
+.env
+.env.local

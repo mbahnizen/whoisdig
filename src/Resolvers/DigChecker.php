@@ -70,6 +70,64 @@ class DigChecker
 
     private function executeDig($domain, $recordType)
     {
+        try {
+            return $this->executeDoh($domain, $recordType);
+        } catch (Exception $dohError) {
+            if (!function_exists('dns_get_record')) {
+                throw $dohError;
+            }
+        }
+
+        return $this->executeNativeDns($domain, $recordType);
+    }
+
+    private function executeDoh($domain, $recordType)
+    {
+        if (!function_exists('curl_init')) {
+            throw new Exception('DNS-over-HTTPS requires the PHP cURL extension.');
+        }
+
+        $providers = [
+            'https://cloudflare-dns.com/dns-query?name=' . rawurlencode($domain) . '&type=' . rawurlencode($recordType),
+            'https://dns.google/resolve?name=' . rawurlencode($domain) . '&type=' . rawurlencode($recordType),
+        ];
+
+        $lastError = null;
+        foreach ($providers as $url) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Accept: application/dns-json',
+                'User-Agent: WHOISDIG/0.2 DNS-over-HTTPS'
+            ]);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_MAXREDIRS, 2);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($response === false || $httpCode < 200 || $httpCode >= 300) {
+                $lastError = $curlError ?: "DoH HTTP {$httpCode}";
+                continue;
+            }
+
+            $data = json_decode($response, true);
+            if (!is_array($data)) {
+                $lastError = 'Invalid DoH JSON response';
+                continue;
+            }
+
+            return $this->parseDohResponse($data, $recordType);
+        }
+
+        throw new Exception('Gagal mengambil DNS record via DNS-over-HTTPS' . ($lastError ? ": {$lastError}" : ''));
+    }
+
+    private function executeNativeDns($domain, $recordType)
+    {
         // BUG-3 FIX: Validate constant exists before using it
         $constName = 'DNS_' . $recordType;
         if (!defined($constName)) {
@@ -115,6 +173,59 @@ class DigChecker
         }
 
         return empty($results) ? [] : $results;
+    }
+
+    private function parseDohResponse($data, $recordType)
+    {
+        $answers = $data['Answer'] ?? [];
+        if (empty($answers) && isset($data['Authority'])) {
+            $answers = $data['Authority'];
+        }
+
+        if (!is_array($answers)) {
+            return [];
+        }
+
+        $expectedType = $this->recordTypeNumber($recordType);
+        $results = [];
+
+        foreach ($answers as $answer) {
+            if (!isset($answer['type'], $answer['data'])) {
+                continue;
+            }
+
+            $type = (int) $answer['type'];
+            if ($recordType !== 'ANY' && $expectedType !== null && $type !== $expectedType && $type !== 5) {
+                continue;
+            }
+
+            $value = trim($answer['data']);
+            if ($type === 16 && $value !== '' && $value[0] !== '"') {
+                $value = '"' . $value . '"';
+            }
+
+            $results[] = $value;
+        }
+
+        return array_values(array_unique($results));
+    }
+
+    private function recordTypeNumber($recordType)
+    {
+        $types = [
+            'A' => 1,
+            'NS' => 2,
+            'CNAME' => 5,
+            'SOA' => 6,
+            'PTR' => 12,
+            'MX' => 15,
+            'TXT' => 16,
+            'AAAA' => 28,
+            'SRV' => 33,
+            'ANY' => 255,
+        ];
+
+        return $types[$recordType] ?? null;
     }
 
     private function parseDigOutput($output)
