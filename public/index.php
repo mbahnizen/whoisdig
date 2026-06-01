@@ -71,7 +71,7 @@
     </script>
 
     <!-- Application Styles -->
-    <link rel="stylesheet" href="css/app.css">
+    <link rel="stylesheet" href="css/app.css?v=<?= filemtime(__DIR__ . '/css/app.css') ?>">
 </head>
 
 <body class="min-h-screen antialiased selection:bg-accent/30 selection:text-white">
@@ -231,6 +231,6 @@
     </div>
 
     <!-- Application Logic -->
-    <script src="js/app.js"></script>
+    <script src="js/app.js?v=<?= filemtime(__DIR__ . '/js/app.js') ?>"></script>
 </body>
 </html>

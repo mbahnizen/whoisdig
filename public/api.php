@@ -43,12 +43,16 @@ try {
             handleDigBulk();
             break;
 
+        case 'tld-check':
+            handleTldCheck();
+            break;
+
         default:
             http_response_code(400);
             echo json_encode([
                 'success' => false,
                 'error' => 'Action tidak dikenali',
-                'available_actions' => ['whois-single', 'whois-bulk', 'dig', 'dig-bulk']
+                'available_actions' => ['whois-single', 'whois-bulk', 'dig', 'dig-bulk', 'tld-check']
             ]);
             break;
     }
@@ -172,6 +176,62 @@ function handleDigBulk()
         'success' => true,
         'total' => count($domains),
         'record_type' => $type,
+        'results' => $results
+    ]);
+    exit;
+}
+
+function handleTldCheck()
+{
+    $domain = $_GET['domain'] ?? null;
+    $tlds = $_GET['tlds'] ?? 'com,net,org,id,co.id';
+
+    if (!$domain) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Domain parameter diperlukan']);
+        return;
+    }
+
+    // Strip any existing TLD from the domain to get base name
+    $domain = preg_replace('/\.[a-z]{2,}(\.[a-z]{2,})?$/i', '', trim(strtolower($domain)));
+    $tldList = array_slice(array_map('trim', explode(',', $tlds)), 0, 10);
+    $whois = new WHOISChecker();
+    $results = [];
+
+    foreach ($tldList as $tld) {
+        $fullDomain = $domain . '.' . $tld;
+        try {
+            $result = $whois->lookup($fullDomain, false);
+            $isAvailable = null;
+            if ($result['success']) {
+                if ($result['available'] ?? false) {
+                    $isAvailable = true;
+                } else {
+                    $statusStr = implode(' ', $result['status'] ?? []);
+                    $isAvailable = stripos($statusStr, 'not found') !== false;
+                }
+            }
+            $results[] = [
+                'tld' => $tld,
+                'domain' => $fullDomain,
+                'available' => $isAvailable,
+                'registrar' => $isAvailable ? null : ($result['registrar'] ?? null),
+            ];
+        } catch (\Exception $e) {
+            $results[] = [
+                'tld' => $tld,
+                'domain' => $fullDomain,
+                'available' => null,
+                'error' => 'Lookup failed',
+            ];
+        }
+        usleep(200000); // 200ms delay between checks
+    }
+
+    logActivity("TLD check: {$domain} across " . count($tldList) . " TLDs");
+    echo json_encode([
+        'success' => true,
+        'base_domain' => $domain,
         'results' => $results
     ]);
     exit;

@@ -12,6 +12,9 @@ class WhoisParser
             'updated_date' => self::extractDate($raw, 'updated'),
             'expiry_date' => self::extractDate($raw, 'expires'),
             'nameservers' => self::extractNameservers($raw),
+            'registrar_iana_id' => self::extractRegistrarIanaId($raw),
+            'registrar_url'     => self::extractRegistrarUrl($raw),
+            'dnssec'            => self::extractDnssec($raw),
         ];
     }
 
@@ -144,5 +147,45 @@ class WhoisParser
         }
 
         return array_values(array_unique($nameservers));
+    }
+
+    private static function extractRegistrarIanaId($raw)
+    {
+        if (preg_match('/Registrar IANA ID\s*:\s*(\d+)/i', $raw, $match)) {
+            return trim($match[1]);
+        }
+        return null;
+    }
+
+    private static function extractRegistrarUrl($raw)
+    {
+        $patterns = [
+            '/Registrar URL\s*:\s*(https?:\/\/[^\s]+)/i',
+            '/Registrar URI\s*:\s*(https?:\/\/[^\s]+)/i',
+        ];
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $raw, $match)) {
+                return trim($match[1]);
+            }
+        }
+        return null;
+    }
+
+    private static function extractDnssec($raw)
+    {
+        $patterns = [
+            '/DNSSEC\s*:\s*(\S+)/i',
+            '/dnssec\s*:\s*(\S+)/i',
+        ];
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $raw, $match)) {
+                $val = strtolower(trim($match[1]));
+                if ($val === 'signeddelegation' || $val === 'signed' || $val === 'yes') {
+                    return 'signed';
+                }
+                return 'unsigned';
+            }
+        }
+        return null;
     }
 }

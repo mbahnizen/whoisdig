@@ -238,6 +238,10 @@ class WhoisService
             'updated' => 'N/A',
             'tld' => $effectiveTld ?: $tld,
             'lifecycle' => null,
+            'registrar_iana_id' => null,
+            'registrar_url' => null,
+            'dnssec' => null,
+            'ip_address' => null,
             'available' => true,
         ];
     }
@@ -404,6 +408,17 @@ class WhoisService
 
         $finalData = $rdapData ? $rdapData : ($whoisData ? $whoisData : []);
 
+        // Auto-resolve A record for domain
+        $ipAddress = null;
+        try {
+            $aRecords = @dns_get_record($domain, DNS_A);
+            if ($aRecords && count($aRecords) > 0) {
+                $ipAddress = $aRecords[0]['ip'];
+            }
+        } catch (\Exception $e) {
+            // Silent — A record resolution is best-effort
+        }
+
         $expiresStr = $finalData['expiry_date'] ?? 'N/A';
         $lifecycle = null;
 
@@ -438,7 +453,11 @@ class WhoisService
             'expires' => $finalData['expiry_date'] ?? 'N/A',
             'updated' => $finalData['updated_date'] ?? 'N/A',
             'tld' => $effectiveTld ?: $tld,
-            'lifecycle' => $lifecycle
+            'lifecycle' => $lifecycle,
+            'registrar_iana_id' => $finalData['registrar_iana_id'] ?? null,
+            'registrar_url'     => $finalData['registrar_url'] ?? null,
+            'dnssec'            => $finalData['dnssec'] ?? null,
+            'ip_address'        => $ipAddress,
         ];
     }
 }

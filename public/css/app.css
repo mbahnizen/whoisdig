@@ -162,6 +162,10 @@ html.light .tab-pill.active {
 .copy-toast {
     transform: translate(-50%, 0);
     animation: toastRise 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    color: #ffffff !important;
+}
+.copy-toast i {
+    color: #ffffff !important;
 }
 
 @keyframes toastRise {
@@ -460,3 +464,207 @@ html.light .bg-emerald-500\/8 {
 html.light .border-emerald-500\/20 {
     border-color: rgba(5,150,105,0.26) !important;
 }
+
+/* ===== Component: Card Action Toolbar ===== */
+.action-btn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #94a3b8;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.action-btn:hover {
+    background: rgba(139,92,246,0.12);
+    color: #c4b5fd;
+    border-color: rgba(139,92,246,0.25);
+}
+.action-btn:active { transform: scale(0.96); }
+.action-btn.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+.action-btn.success {
+    background: rgba(16,185,129,0.12);
+    color: #34d399;
+    border-color: rgba(16,185,129,0.22);
+}
+
+html.light .action-btn {
+    background: rgba(100,116,139,0.05);
+    border-color: rgba(126,142,170,0.2);
+    color: #697991;
+}
+html.light .action-btn:hover {
+    background: rgba(139,92,246,0.08);
+    color: #7c3aed;
+    border-color: rgba(139,92,246,0.2);
+}
+html.light .action-btn.success {
+    background: rgba(5,150,105,0.08);
+    color: #059669;
+    border-color: rgba(5,150,105,0.18);
+}
+
+/* ===== Component: DNSSEC Badges ===== */
+.badge-dnssec-signed {
+    background: rgba(16,185,129,0.12);
+    color: #34d399;
+    border: 1px solid rgba(16,185,129,0.22);
+}
+.badge-dnssec-unsigned {
+    background: rgba(100,116,139,0.12);
+    color: #94a3b8;
+    border: 1px solid rgba(100,116,139,0.2);
+}
+
+html.light .badge-dnssec-signed {
+    background: rgba(5,150,105,0.1);
+    color: #047857;
+    border-color: rgba(5,150,105,0.22);
+}
+html.light .badge-dnssec-unsigned {
+    background: rgba(100,116,139,0.08);
+    color: #697991;
+    border-color: rgba(100,116,139,0.18);
+}
+
+
+/* ===== Component: Related TLD Pills ===== */
+.tld-pill {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    user-select: none;
+}
+.tld-pill-taken {
+    background: rgba(100,116,139,0.1);
+    color: #94a3b8;
+    border: 1px solid rgba(100,116,139,0.15);
+}
+.tld-pill-taken:hover {
+    background: rgba(100,116,139,0.2);
+    border-color: rgba(100,116,139,0.3);
+    color: #cbd5e1;
+    transform: translateY(-1px);
+}
+.tld-pill-available {
+    background: rgba(16,185,129,0.12);
+    color: #34d399;
+    border: 1px solid rgba(16,185,129,0.22);
+}
+.tld-pill-available:hover {
+    background: rgba(16,185,129,0.22);
+    border-color: rgba(16,185,129,0.4);
+    transform: translateY(-1px);
+}
+.tld-pill-checking {
+    background: rgba(139,92,246,0.08);
+    color: #a78bfa;
+    border: 1px solid rgba(139,92,246,0.15);
+    cursor: default;
+}
+.tld-pill-error {
+    background: rgba(244,63,94,0.08);
+    color: #fb7185;
+    border: 1px solid rgba(244,63,94,0.15);
+}
+.tld-pill-error:hover {
+    background: rgba(244,63,94,0.16);
+    border-color: rgba(244,63,94,0.3);
+    transform: translateY(-1px);
+}
+
+html.light .tld-pill-taken {
+    background: rgba(100,116,139,0.06);
+    color: #697991;
+    border-color: rgba(100,116,139,0.15);
+}
+html.light .tld-pill-taken:hover {
+    background: rgba(100,116,139,0.12);
+    border-color: rgba(100,116,139,0.25);
+    color: #334155;
+}
+html.light .tld-pill-available {
+    background: rgba(5,150,105,0.08);
+    color: #059669;
+    border-color: rgba(5,150,105,0.2);
+}
+html.light .tld-pill-available:hover {
+    background: rgba(5,150,105,0.14);
+    border-color: rgba(5,150,105,0.35);
+}
+html.light .tld-pill-checking {
+    background: rgba(139,92,246,0.06);
+    color: #7c3aed;
+    border-color: rgba(139,92,246,0.12);
+}
+html.light .tld-pill-error {
+    background: rgba(220,38,38,0.06);
+    color: #dc2626;
+    border-color: rgba(220,38,38,0.15);
+}
+html.light .tld-pill-error:hover {
+    background: rgba(220,38,38,0.12);
+    border-color: rgba(220,38,38,0.25);
+}
+
+
+/* ===== Component: Spin animation for loading states ===== */
+@keyframes spin { to { transform: rotate(360deg); } }
+.animate-spin { animation: spin 1s linear infinite; }
+
+
+/* Fix Badge & Pill Text clipping in html2canvas / normal renders */
+[class*="badge-"],
+.badge-emerald,
+.badge-blue,
+.badge-red,
+.badge-yellow,
+.badge-orange,
+.badge-purple,
+.badge-slate,
+.tld-pill {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1.15 !important;
+    padding-top: 2px !important;
+    padding-bottom: 2.5px !important;
+    overflow: visible !important;
+    height: auto !important;
+}
+
+/* Fix Nameserver & Domain Status Pill clipping */
+.font-mono.bg-white\/5,
+html.light .font-mono.bg-white\/5 {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    line-height: 1.15 !important;
+    padding-top: 2px !important;
+    padding-bottom: 2.5px !important;
+    overflow: visible !important;
+    height: auto !important;
+}
+
+/* Card header icon wrapper */
+.header-icon-wrapper {
+    display: inline-flex;
+    align-items: center;
+}
+
+

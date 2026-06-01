@@ -323,6 +323,17 @@ function createWhoisCard(data) {
         });
     }
 
+    // DNSSEC Badge
+    if (data.dnssec) {
+        const dnssecVal = String(data.dnssec).toLowerCase();
+        const isSigned = dnssecVal === 'signed' || dnssecVal === 'true';
+        metaBadges.push({
+            label: isSigned ? 'DNSSEC' : 'No DNSSEC',
+            cls: isSigned ? 'badge-dnssec-signed' : 'badge-dnssec-unsigned',
+            icon: isSigned ? 'shield-check' : 'shield-slash'
+        });
+    }
+
     if (isAvailable || !isRegistered) {
         attentionBadges.push({ label: 'Available', cls: 'badge-status-available', icon: 'check-circle' });
         div.setAttribute('data-status', 'available');
@@ -349,7 +360,7 @@ function createWhoisCard(data) {
         ? '<i class="ph-fill ph-identification-card text-blue-400 text-lg"></i>'
         : '<i class="ph-fill ph-check-circle text-emerald-400 text-lg"></i>';
 
-    const badgeHtml = b => `<span class="${b.cls} text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 flex-shrink-0" ${b.title ? `title="${escapeHtml(b.title)}"` : ''}><i class="ph-bold ph-${b.icon}"></i>${b.label}</span>`;
+    const badgeHtml = b => `<span class="${b.cls} text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center flex-shrink-0" style="margin-right: 6px; margin-bottom: 4px;" ${b.title ? `title="${escapeHtml(b.title)}"` : ''}><i class="ph-bold ph-${b.icon}" style="margin-right: 4.5px;"></i>${b.label}</span>`;
     const attentionBadgesHtml = attentionBadges.map(badgeHtml).join('');
     const metaBadgesHtml = metaBadges.map(badgeHtml).join('');
     const sourceBadgesHtml = metaBadgesHtml;
@@ -362,7 +373,7 @@ function createWhoisCard(data) {
             ? '<span class="inline-flex items-center gap-1.5 text-emerald-300"><i class="ph-bold ph-check-circle text-emerald-400"></i>Not registered</span>'
             : '<span class="inline-flex items-center gap-1.5 text-slate-400"><i class="ph-bold ph-power text-slate-500"></i>No nameservers</span>';
     const nsDetailHtml = nsArr.length > 0
-        ? nsArr.map(ns => `<span class="text-[11px] font-mono bg-white/5 text-slate-300 px-2 py-1 rounded-lg border border-white/5">${escapeHtml(ns)}</span>`).join('')
+        ? nsArr.map(ns => `<span class="text-[11px] font-mono bg-white/5 text-slate-300 px-2 py-1 rounded-lg border border-white/5 inline-block">${escapeHtml(ns)}</span>`).join('')
         : isAvailable
             ? `<div class="w-full rounded-lg border border-emerald-500/20 bg-emerald-500/8 px-3 py-2 text-[11px] text-emerald-300 flex items-center gap-2">
             <i class="ph-bold ph-check-circle text-emerald-400"></i>
@@ -373,10 +384,10 @@ function createWhoisCard(data) {
             <span>No nameservers detected. This registered domain is currently inactive.</span>
         </div>`;
     const domainActionHtml = (isInactive || isAvailable)
-        ? `<button data-copy-value="${escapeHtml(data.domain)}" onclick="event.stopPropagation(); copyText(this.dataset.copyValue)" class="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 border border-white/5">
+        ? `<button data-copy-value="${escapeHtml(data.domain)}" onclick="event.stopPropagation(); copyText(this.dataset.copyValue)" class="action-btn" title="Copy domain name">
             <i class="ph-bold ph-copy"></i> Copy Domain
         </button>`
-        : `<a href="http://${escapeHtml(data.domain)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5 border border-white/5">
+        : `<a href="http://${escapeHtml(data.domain)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="action-btn" title="Visit website">
             <i class="ph-bold ph-arrow-square-out"></i> Visit
         </a>`;
     const availableSummaryHtml = `
@@ -426,20 +437,53 @@ function createWhoisCard(data) {
                     <span>No registration record was found for this domain.</span>
                 </div>
             </div>
-            <div class="flex gap-2 pt-1">
+
+            <div class="card-actions flex flex-wrap gap-2 pt-3 mt-3 border-t border-emerald-500/10">
                 ${domainActionHtml}
+                <button class="action-btn" data-action="copy-summary" title="Copy summary text">
+                    <i class="ph-bold ph-clipboard-text"></i> Copy Summary
+                </button>
+                <button class="action-btn" data-action="check-tlds" title="Check availability on other domain extensions (.com, .net, etc.)">
+                    <i class="ph-bold ph-globe-hemisphere-east"></i> Check Extension Availability
+                </button>
             </div>
+            <div class="tld-results hidden px-0 pt-3"></div>
         </div>`;
+    // Registrar display
+    const registrarDisplay = escapeHtml(data.registrar) || '-';
+
+    // DNSSEC display
+    const dnssecVal = String(data.dnssec || '').toLowerCase();
+    const dnssecSigned = dnssecVal === 'signed' || dnssecVal === 'true';
+    const dnssecDisplay = data.dnssec ? (dnssecSigned ? 'Signed' : 'Unsigned') : '-';
+
+    // Action toolbar HTML
+    const actionToolbarHtml = `
+        <div class="card-actions flex flex-wrap gap-2 pt-3 mt-3 border-t border-white/5">
+            ${domainActionHtml}
+            <button class="action-btn" data-action="copy-summary" title="Copy summary text">
+                <i class="ph-bold ph-clipboard-text"></i> Copy Summary
+            </button>
+            <button class="action-btn" data-action="check-tlds" title="Check availability on other domain extensions (.com, .net, etc.)">
+                <i class="ph-bold ph-globe-hemisphere-east"></i> Check Extension Availability
+            </button>
+        </div>
+        <div class="tld-results hidden px-0 pt-3"></div>`;
+
     const registeredDetailHtml = `
         <div class="px-4 md:px-5 pb-4 pt-1 space-y-3">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                 ${detailCell('Created', formatDate(data.created), 'calendar-blank', 'text-accent')}
                 ${detailCell('Updated', formatDate(data.updated), 'clock-clockwise', 'text-slate-300')}
                 ${detailCell('Expiry', formatDate(data.expires), 'flag', 'text-pink-400')}
-                ${detailCell('Registrar', escapeHtml(data.registrar) || '-', 'buildings', 'text-slate-200')}
+                ${detailCell('Registrar', registrarDisplay, 'buildings', 'text-slate-200')}
                 ${detailCell('WHOIS Server', data.whois_server || '-', 'hard-drives', 'text-slate-300')}
                 ${detailCell('TLD', '.' + (data.tld || '-'), 'globe-hemisphere-east', 'text-slate-300')}
+                ${data.ip_address ? detailCell('IP Address', data.ip_address, 'hard-drive', 'text-blue-400') : ''}
+                ${detailCell('DNSSEC', dnssecDisplay, dnssecSigned ? 'shield-check' : 'shield-slash', dnssecSigned ? 'text-emerald-400' : 'text-slate-300')}
             </div>
+
+
 
             <div class="bg-black/20 p-3 rounded-xl border border-white/5">
                 <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-2">Nameservers</div>
@@ -451,7 +495,7 @@ function createWhoisCard(data) {
             <div class="bg-black/20 p-3 rounded-xl border border-white/5">
                 <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-2">Domain Status</div>
                 <div class="flex flex-wrap gap-1.5">
-                    ${rawStatuses.length > 0 ? rawStatuses.map(s => `<span class="text-[11px] font-mono bg-white/5 text-slate-400 px-2 py-1 rounded-lg border border-white/5">${escapeHtml(s)}</span>`).join('') : '<span class="text-slate-600 text-[11px]">—</span>'}
+                    ${rawStatuses.length > 0 ? rawStatuses.map(s => `<span class="text-[11px] font-mono bg-white/5 text-slate-400 px-2 py-1 rounded-lg border border-white/5 inline-block">${escapeHtml(s)}</span>`).join('') : '<span class="text-slate-600 text-[11px]">—</span>'}
                 </div>
             </div>
 
@@ -464,20 +508,18 @@ function createWhoisCard(data) {
                 <pre class="mt-2 bg-black/40 p-3 rounded-xl text-[11px] font-mono text-emerald-400/80 max-h-48 overflow-auto border border-white/5 whitespace-pre-wrap break-all">${escapeHtml(atob(data.raw))}</pre>
             </details>` : ''}
 
-            <div class="flex gap-2 pt-1">
-                ${domainActionHtml}
-            </div>
+            ${actionToolbarHtml}
         </div>`;
     const summaryHtml = isAvailable ? availableSummaryHtml : registeredSummaryHtml;
     const detailBodyHtml = isAvailable ? availableDetailHtml : registeredDetailHtml;
 
     div.innerHTML = `
         <!-- Card Header -->
-        <div class="card-header p-3.5 md:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3" onclick="toggleCard(this.parentElement)">
-            <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                ${icon}
-                <span class="font-display font-bold text-white text-base md:text-lg truncate">${escapeHtml(data.domain)}</span>
-                ${sourceBadgesHtml}
+        <div class="card-header p-3.5 md:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center" onclick="toggleCard(this.parentElement)">
+            <div class="flex items-center min-w-0 flex-1">
+                <span class="header-icon-wrapper" style="margin-right: 9px;">${icon}</span>
+                <span class="font-display font-bold text-white text-base md:text-lg truncate" style="margin-right: 10px;">${escapeHtml(data.domain)}</span>
+                <span class="flex items-center flex-wrap" style="margin-top: 1px;">${sourceBadgesHtml}</span>
             </div>
             <div class="flex items-center gap-2">
                 <div class="flex flex-wrap gap-1.5 justify-end">${statusBadgesHtml}</div>
@@ -491,49 +533,13 @@ function createWhoisCard(data) {
         <!-- Expandable Detail Body -->
         <div class="card-body">
             <div>
-                ${isAvailable ? detailBodyHtml : ''}
-                <div class="${isAvailable ? 'hidden ' : ''}px-4 md:px-5 pb-4 pt-1 space-y-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                        ${detailCell('Created', formatDate(data.created), 'calendar-blank', 'text-accent')}
-                        ${detailCell('Updated', formatDate(data.updated), 'clock-clockwise', 'text-slate-300')}
-                        ${detailCell('Expiry', formatDate(data.expires), 'flag', 'text-pink-400')}
-                        ${detailCell('Registrar', escapeHtml(data.registrar) || '-', 'buildings', 'text-slate-200')}
-                        ${detailCell('WHOIS Server', data.whois_server || '-', 'hard-drives', 'text-slate-300')}
-                        ${detailCell('TLD', '.' + (data.tld || '-'), 'globe-hemisphere-east', 'text-slate-300')}
-                    </div>
-
-                    <div class="bg-black/20 p-3 rounded-xl border border-white/5">
-                        <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-2">Nameservers</div>
-                        <div class="flex flex-wrap gap-1.5">
-                            ${nsDetailHtml}
-                        </div>
-                    </div>
-
-                    <div class="bg-black/20 p-3 rounded-xl border border-white/5">
-                        <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-2">Domain Status</div>
-                        <div class="flex flex-wrap gap-1.5">
-                            ${rawStatuses.length > 0 ? rawStatuses.map(s => `<span class="text-[11px] font-mono bg-white/5 text-slate-400 px-2 py-1 rounded-lg border border-white/5">${escapeHtml(s)}</span>`).join('') : '<span class="text-slate-600 text-[11px]">—</span>'}
-                        </div>
-                    </div>
-
-                    ${data.raw ? `
-                    <details class="group">
-                        <summary class="text-[10px] uppercase tracking-wider font-bold text-slate-500 cursor-pointer hover:text-slate-300 transition-colors flex items-center gap-1.5">
-                            <i class="ph ph-terminal"></i> Raw WHOIS Output
-                            <i class="ph ph-caret-down text-[10px] group-open:rotate-180 transition-transform"></i>
-                        </summary>
-                        <pre class="mt-2 bg-black/40 p-3 rounded-xl text-[11px] font-mono text-emerald-400/80 max-h-48 overflow-auto border border-white/5 whitespace-pre-wrap break-all">${escapeHtml(atob(data.raw))}</pre>
-                    </details>` : ''}
-
-                    <div class="flex gap-2 pt-1">
-                        ${domainActionHtml}
-                    </div>
-                </div>
+                ${detailBodyHtml}
             </div>
         </div>
     `;
 
     div._data = data;
+    attachCardActions(div, data);
     return div;
 }
 
@@ -545,7 +551,7 @@ function detailCell(label, value, icon, colorClass) {
                 <i class="ph ph-${icon} text-slate-500 text-xs"></i>
                 <span class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider">${escapeHtml(label)}</span>
             </div>
-            <div class="${colorClass} font-mono text-xs truncate" title="${safeVal}">${safeVal}</div>
+            <div class="${colorClass} text-xs font-semibold truncate" style="line-height: 1.2;" title="${safeVal}">${safeVal}</div>
         </div>
     `;
 }
@@ -575,7 +581,7 @@ function createIpCard(data) {
     if (geo.is_hosting) extraBadges.push({ label: 'Hosting / DC', cls: 'badge-slate', icon: 'hard-drives' });
     if (geo.is_mobile) extraBadges.push({ label: 'Mobile', cls: 'badge-blue', icon: 'device-mobile' });
 
-    const extraBadgesHtml = extraBadges.map(b => `<span class="${b.cls} text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1"><i class="ph-bold ph-${b.icon}"></i>${b.label}</span>`).join('');
+    const extraBadgesHtml = extraBadges.map(b => `<span class="${b.cls} text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center" style="margin-right: 6px; margin-bottom: 4px;"><i class="ph-bold ph-${b.icon}" style="margin-right: 4.5px;"></i>${b.label}</span>`).join('');
 
     // Copy button helper — S-1 FIX: use data-attribute instead of inline onclick
     const copyBtn = (val, label) => `<button data-copy-value="${escapeHtml(val)}" class="copy-btn ml-1 p-0.5 rounded hover:bg-white/10 text-slate-500 hover:text-white transition-colors inline-flex" title="Copy ${escapeHtml(label)}"><i class="ph-bold ph-copy text-[10px]"></i></button>`;
@@ -596,12 +602,12 @@ function createIpCard(data) {
                 </div>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-                <span class="badge-purple text-[10px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1">
-                    <i class="ph-bold ph-network"></i>${data.ip_version === 'v6' ? 'IPv6' : 'IP Address'}
+                <span class="badge-purple text-[10px] font-bold px-2.5 py-0.5 rounded-lg flex items-center" style="margin-right: 6px; margin-bottom: 4px;">
+                    <i class="ph-bold ph-network" style="margin-right: 4.5px;"></i>${data.ip_version === 'v6' ? 'IPv6' : 'IP Address'}
                 </span>
                 ${data.resolution_method && data.resolution_method !== 'unknown' ? `
-                <span class="${data.resolution_method === 'rdap' ? 'badge-emerald' : 'badge-orange'} text-[10px] font-bold px-2.5 py-0.5 rounded-lg flex items-center gap-1">
-                    <i class="ph-bold ph-${data.resolution_method === 'rdap' ? 'lightning' : 'broadcast'}"></i>${data.resolution_method.toUpperCase()}
+                <span class="${data.resolution_method === 'rdap' ? 'badge-emerald' : 'badge-orange'} text-[10px] font-bold px-2.5 py-0.5 rounded-lg flex items-center" style="margin-right: 6px; margin-bottom: 4px;">
+                    <i class="ph-bold ph-${data.resolution_method === 'rdap' ? 'lightning' : 'broadcast'}" style="margin-right: 4.5px;"></i>${data.resolution_method.toUpperCase()}
                 </span>` : ''}
                 ${extraBadgesHtml}
                 ${countryFlag ? `<span class="text-sm" title="${countryName}">${countryFlag}</span>` : ''}
@@ -719,12 +725,20 @@ function createIpCard(data) {
                         </summary>
                         <pre class="mt-2 bg-black/40 p-3 rounded-xl text-[11px] font-mono text-purple-300/80 max-h-48 overflow-auto border border-white/5 whitespace-pre-wrap break-all">${escapeHtml(atob(data.raw))}</pre>
                     </details>` : ''}
+
+                    <!-- IP Card Action Toolbar -->
+                    <div class="card-actions flex flex-wrap gap-2 pt-3 mt-3 border-t border-purple-500/10">
+                        <button class="action-btn" data-action="copy-summary" title="Copy IP summary text">
+                            <i class="ph-bold ph-clipboard-text"></i> Copy Summary
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     `;
 
     div._data = data;
+    attachCardActions(div, data);
 
     // S-1 FIX: Attach event listeners for copy buttons instead of inline onclick
     div.querySelectorAll('.copy-btn').forEach(btn => {
@@ -940,10 +954,190 @@ function escapeHtml(str) {
 
 function copyText(text) {
     navigator.clipboard.writeText(text).then(() => {
-        const toast = document.createElement('div');
-        toast.className = 'copy-toast fixed bottom-6 left-1/2 bg-accent text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg z-50';
-        toast.textContent = 'Copied!';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 1500);
+        showToast('Copied!');
     });
+}
+
+function showToast(msg, type = 'default') {
+    const toast = document.createElement('div');
+    const bgClass = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-accent';
+    toast.className = `copy-toast fixed bottom-6 left-1/2 ${bgClass} text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg z-50 flex items-center gap-2`;
+    const iconMap = { success: 'check-circle', error: 'warning', default: 'check' };
+    toast.innerHTML = `<i class="ph-bold ph-${iconMap[type] || 'check'}"></i> ${escapeHtml(msg)}`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2000);
+}
+
+// ===========================
+// CARD ACTION TOOLBAR
+// ===========================
+function attachCardActions(cardEl, data) {
+    cardEl.querySelectorAll('.action-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const action = btn.dataset.action;
+            if (action === 'copy-summary') copyCardSummary(data);
+            else if (action === 'check-tlds') await checkRelatedTlds(cardEl, data);
+        });
+    });
+}
+
+// ===========================
+// COPY SUMMARY TEXT
+// ===========================
+function copyCardSummary(data) {
+    const text = data.is_ip ? buildIpSummaryText(data) : buildDomainSummaryText(data);
+    navigator.clipboard.writeText(text).then(() => {
+        showToast('Summary copied!', 'success');
+    }).catch(() => {
+        showToast('Copy failed', 'error');
+    });
+}
+
+function buildDomainSummaryText(data) {
+    const P = 15; // consistent padding for all labels
+    let lines = [];
+
+    lines.push(`${'Domain'.padEnd(P)}: ${data.domain || '-'}`);
+    lines.push(`${'Registrar'.padEnd(P)}: ${data.registrar || '-'}`);
+    if (data.registrar_iana_id) lines.push(`${'IANA ID'.padEnd(P)}: ${data.registrar_iana_id}`);
+    lines.push('');
+    lines.push(`${'Created'.padEnd(P)}: ${formatDate(data.created)}`);
+    lines.push(`${'Updated'.padEnd(P)}: ${formatDate(data.updated)}`);
+    lines.push(`${'Expires'.padEnd(P)}: ${formatDate(data.expires)}`);
+    lines.push('');
+
+    const statuses = Array.isArray(data.status) ? data.status : [];
+    if (statuses.length > 0) {
+        lines.push('Status:');
+        statuses.forEach(s => lines.push(`  - ${s}`));
+        lines.push('');
+    }
+
+    if (data.dnssec) {
+        const dnssecVal = String(data.dnssec).toLowerCase();
+        const isSigned = dnssecVal === 'signed' || dnssecVal === 'true';
+        lines.push(`${'DNSSEC'.padEnd(P)}: ${isSigned ? 'Signed' : 'Unsigned'}`);
+        lines.push('');
+    }
+
+    const ns = Array.isArray(data.nameservers) ? data.nameservers : [];
+    if (ns.length > 0) {
+        lines.push('Nameservers:');
+        ns.forEach(n => lines.push(`  - ${n}`));
+        lines.push('');
+    }
+
+    if (data.ip_address) {
+        lines.push('IP Address:');
+        lines.push(`  - ${data.ip_address}`);
+    }
+
+    return lines.join('\n').trim();
+}
+
+function buildIpSummaryText(data) {
+    const pad = (label, len = 14) => label.padEnd(len, ' ');
+    const geo = data.geo || {};
+    let lines = [];
+
+    lines.push(`${pad('IP Address')}  : ${data.domain || '-'}`);
+    lines.push(`${pad('Organization')}: ${data.organization || '-'}`);
+    lines.push(`${pad('ASN')}         : ${data.asn || '-'}${data.asn_name ? ' (' + data.asn_name + ')' : ''}`);
+    lines.push(`${pad('Network')}     : ${data.network_name || '-'}`);
+    lines.push(`${pad('CIDR')}        : ${data.cidr || '-'}`);
+    lines.push('');
+    if (geo.city || geo.country_name) {
+        lines.push(`${pad('City')}        : ${geo.city || '-'}`);
+        lines.push(`${pad('Region')}      : ${geo.region || '-'}`);
+        lines.push(`${pad('Country')}     : ${geo.country_name || '-'}`);
+        lines.push(`${pad('ISP')}         : ${geo.isp || '-'}`);
+        lines.push('');
+    }
+    if (data.hostname) lines.push(`${pad('Hostname')}    : ${data.hostname}`);
+    if (data.abuse_contact && data.abuse_contact.email) {
+        lines.push(`${pad('Abuse Email')} : ${data.abuse_contact.email}`);
+    }
+
+    return lines.join('\n').trim();
+}
+
+// ===========================
+// RELATED TLD CHECK
+// ===========================
+async function checkRelatedTlds(cardEl, data) {
+    const btn = cardEl.querySelector('[data-action="check-tlds"]');
+    const container = cardEl.querySelector('.tld-results');
+    if (!btn || !container) return;
+
+    // Toggle if already loaded
+    if (container.dataset.loaded === 'true') {
+        container.classList.toggle('hidden');
+        return;
+    }
+
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="ph-bold ph-spinner animate-spin"></i> Checking Extensions...';
+    btn.classList.add('loading');
+
+    // Extract base domain (strip TLD)
+    const baseDomain = (data.domain || '').replace(/\.[a-z]{2,}(\.[a-z]{2,})?$/i, '');
+    const tlds = 'com,net,org,id,co.id';
+
+    try {
+        const res = await fetch(`${API_BASE}?action=tld-check&domain=${encodeURIComponent(baseDomain)}&tlds=${encodeURIComponent(tlds)}`);
+        const result = await res.json();
+
+        if (result.success && result.results) {
+            container.innerHTML = `
+                <div class="text-slate-500 font-semibold text-[10px] uppercase tracking-wider mb-2 flex items-center justify-between">
+                    <span class="flex items-center gap-1.5">
+                        <i class="ph ph-globe-hemisphere-east text-accent text-xs"></i> Alternative Extension Status
+                    </span>
+                    <span class="flex items-center gap-2 text-[9px] lowercase text-slate-400/50 font-normal">
+                        <span class="flex items-center gap-0.5"><i class="ph-bold ph-check-circle text-emerald-400"></i> available</span>
+                        <span class="flex items-center gap-0.5"><i class="ph-bold ph-lock-simple text-slate-400/60"></i> registered</span>
+                    </span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                    ${result.results.map(r => {
+                        if (r.available === null) {
+                            return `<span class="tld-pill tld-pill-error" data-domain="${escapeHtml(r.domain)}" title="Lookup failed. Click to try WHOIS lookup."><i class="ph-bold ph-warning"></i> .${escapeHtml(r.tld)}</span>`;
+                        }
+                        if (r.available) {
+                            return `<span class="tld-pill tld-pill-available" data-domain="${escapeHtml(r.domain)}" title="Available! Click to query."><i class="ph-bold ph-check-circle"></i> .${escapeHtml(r.tld)}</span>`;
+                        }
+                        return `<span class="tld-pill tld-pill-taken" data-domain="${escapeHtml(r.domain)}" title="Registered via ${escapeHtml(r.registrar || 'unknown registrar')}. Click to see WHOIS info."><i class="ph-bold ph-lock-simple"></i> .${escapeHtml(r.tld)}</span>`;
+                    }).join('')}
+                </div>`;
+
+            // Bind click handlers to make pills interactive
+            container.querySelectorAll('.tld-pill').forEach(pill => {
+                pill.addEventListener('click', e => {
+                    e.stopPropagation();
+                    const targetDomain = pill.dataset.domain;
+                    if (targetDomain) {
+                        elInput.value = targetDomain;
+                        switchMode('whois');
+                        updateCount();
+                        processDomains();
+                        // Scroll smoothly back to input
+                        elInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+            });
+
+            container.classList.remove('hidden');
+            container.dataset.loaded = 'true';
+        }
+
+        btn.innerHTML = '<i class="ph-bold ph-check"></i> Extensions Checked';
+        btn.classList.remove('loading');
+        btn.classList.add('success');
+        setTimeout(() => { btn.innerHTML = origHtml; btn.classList.remove('success'); }, 2500);
+    } catch (err) {
+        btn.innerHTML = origHtml;
+        btn.classList.remove('loading');
+        showToast('TLD check failed', 'error');
+    }
 }

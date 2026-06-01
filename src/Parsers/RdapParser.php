@@ -66,6 +66,47 @@ class RdapParser
             }
         }
 
+        // DNSSEC
+        $dnssec = null;
+        if (isset($data['secureDNS'])) {
+            $dnssec = !empty($data['secureDNS']['delegationSigned']) ? 'signed' : 'unsigned';
+        }
+
+        // Registrar details from entities
+        $registrarIanaId = null;
+        $registrarUrl = null;
+        if (isset($data['entities'])) {
+            foreach ($data['entities'] as $entity) {
+                if (isset($entity['roles']) && in_array('registrar', $entity['roles'])) {
+                    // IANA ID from publicIds
+                    if (isset($entity['publicIds'])) {
+                        foreach ($entity['publicIds'] as $pid) {
+                            if (isset($pid['type']) && stripos($pid['type'], 'IANA') !== false) {
+                                $registrarIanaId = $pid['identifier'] ?? null;
+                            }
+                        }
+                    }
+                    // URL from vcard or links
+                    if (isset($entity['vcardArray'][1])) {
+                        foreach ($entity['vcardArray'][1] as $vcardItem) {
+                            if ($vcardItem[0] === 'url') {
+                                $registrarUrl = $vcardItem[3] ?? null;
+                            }
+                        }
+                    }
+                    if (!$registrarUrl && isset($entity['links'])) {
+                        foreach ($entity['links'] as $link) {
+                            if (isset($link['href']) && strpos($link['href'], 'http') === 0) {
+                                $registrarUrl = $link['href'];
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
         return [
             'registrar' => $registrar,
             'status' => $data['status'] ?? [],
@@ -73,6 +114,9 @@ class RdapParser
             'updated_date' => $fmtDate($updated),
             'expiry_date' => $fmtDate($expires),
             'nameservers' => $nameservers,
+            'registrar_iana_id' => $registrarIanaId,
+            'registrar_url'     => $registrarUrl,
+            'dnssec'            => $dnssec,
         ];
     }
 
