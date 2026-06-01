@@ -7,7 +7,7 @@
 <p align="center">
   <strong>Intelligent WHOIS, RDAP & DNS Lookup Engine</strong><br/>
   A fast, hybrid domain intelligence tool with IP geolocation, circuit breakers, and smart caching.<br><br>
-  🚀 <b>Live Demo:</b> <a href="https://apps.nizen.my.id/whoisdig/">https://apps.nizen.my.id/whoisdig/</a>
+  🚀 <b>Live Demo:</b> <a href="https://whoisdig.web.app">https://whoisdig.web.app</a>
 </p>
 
 <p align="center">
@@ -15,7 +15,8 @@
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/status-stable-brightgreen?style=flat-square" alt="Status" />
   <img src="https://img.shields.io/badge/RDAP-supported-blue?style=flat-square" alt="RDAP" />
-  <img src="https://img.shields.io/badge/wasmer%20edge-supported-brightgreen?style=flat-square" alt="Wasmer Edge" />
+  <img src="https://img.shields.io/badge/Google%20Cloud%20Run-supported-blue?style=flat-square&logo=google-cloud" alt="Google Cloud Run" />
+  <img src="https://img.shields.io/badge/Firebase%20Hosting-supported-orange?style=flat-square&logo=firebase" alt="Firebase Hosting" />
 </p>
 
 ---
@@ -34,6 +35,9 @@
 | **Public Suffix List** | Accurate multi-level TLD resolution via Mozilla's PSL (auto-updated) |
 | **DNS Dig** | Full DNS record lookup — A, AAAA, MX, NS, CNAME, TXT, SOA, SRV, PTR |
 | **Rate Limiting** | File-based sliding window rate limiter with automatic garbage collection |
+| **DNSSEC Detection** | Real-time DNSSEC status (Signed/Unsigned) with visual badges |
+| **TLD Availability Check** | Instantly check alternative TLD availability (.com, .net, .org, .id, etc.) in one click |
+| **Copy Summary** | Extract perfectly aligned monospaced summaries of domains and IPs for clean sharing |
 | **Dark / Light Mode** | Responsive, glassmorphism UI built with Tailwind CSS |
 
 ---
@@ -201,73 +205,69 @@ GET /api.php?action=whois-single&domain=example.com&refresh=1
 
 ## ☁️ Deployment
 
-WHOISDIG is natively built to be deployed on **Wasmer Edge**, offering edge-based routing and WASIX compatibility without Docker.
+WHOISDIG is natively designed to be deployed in a high-performance serverless environment using **Google Cloud Run** (for dynamic PHP processing) and **Firebase Hosting** (as an edge CDN and proxy gateway).
 
-### Deploy to Wasmer Edge
-
-1. Install the [Wasmer CLI](https://wasmer.io).
-2. Authenticate using `wasmer login`.
-3. Run the deployment command:
-
-   ```bash
-   wasmer deploy
-   ```
-
-### Continuous Deployment (CI/CD)
-
-This repository includes a GitHub Actions workflow (`.github/workflows/wasmer-deploy.yml`) for automated deployments.
-To enable it:
-
-1. Go to your GitHub Repository Settings -> Secrets and variables -> Actions.
-2. Add a new secret named `WASMER_TOKEN` with your Wasmer API token.
-3. Push to the `main` branch to trigger an automatic deployment.
-
-### Persistent Logs and Cache (S3 Volumes)
-
-Wasmer Edge provides S3-compatible persistent storage. Your cache and logs are mounted safely to `/app/storage`.
-You can access your production cache and logs via the CLI using `rclone` or `aws s3`:
-
+### 1. Local Development (Docker Compose)
+To run the entire stack locally in a containerized environment:
 ```bash
-# Get your S3 credentials
-wasmer app volume credentials <namespace>/whoisdig
-
-# Example: List logs using rclone (Note: use path-style access)
-rclone ls edge-whoisdig:storage-volume/logs/ --s3-force-path-style=true
-```
-
-### Deploy to Google Cloud Run (Docker)
-
-WHOISDIG can be run universally as a Docker container, which is fully compatible with **Google Cloud Run** (offering a generous free tier, fast auto-scaling, and complete outbound TCP port 43 access for WHOIS lookups).
-
-#### 1. Local Development (Docker Compose)
-To run the app locally using Docker:
-```bash
+# Start the containers
 docker compose up --build
 ```
-This will start the server at `http://localhost:8080` and persist your cache and logs in Docker volumes.
+This starts the application at `http://localhost:8080` with auto-reloading and persists your caching and metrics logging locally.
 
-#### 2. Manual Deploy to Cloud Run
-Build and deploy manually using the Google Cloud SDK:
+---
+
+### 2. Deploying to Google Cloud Run
+
+Google Cloud Run offers a generous free tier (2 million requests/month) and complete outbound TCP port 43 access required for legacy WHOIS lookups.
+
+#### Manual CLI Deployment:
+If you have the Google Cloud SDK installed, you can build and deploy directly:
 ```bash
-# Build and push the image to Google Artifact Registry
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/whoisdig
+# Configure gcloud active project
+gcloud config set project whoisdig
 
-# Deploy to Cloud Run
+# Enable dynamic APIs
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com
+
+# Create the Artifact Registry repository
+gcloud artifacts repositories create whoisdig-repo --repository-format=docker --location=asia-southeast2
+
+# Build & Deploy to Cloud Run
 gcloud run deploy whoisdig \
-  --image gcr.io/YOUR_PROJECT_ID/whoisdig \
-  --platform managed \
+  --source . \
   --region asia-southeast2 \
-  --allow-unauthenticated
+  --allow-unauthenticated \
+  --port 8080
 ```
 
-#### 3. Continuous Deployment (CI/CD via GitHub Actions)
-This repository includes an automated workflow under `.github/workflows/deploy-cloudrun.yml`. 
-To configure auto-deploys on every `push` to `main`:
-1. In your GCP Console, enable the **Cloud Run API** and **Artifact Registry API**.
-2. Create an **Artifact Registry Docker Repository** named `whoisdig-repo`.
-3. In GitHub, go to your repository **Settings -> Secrets and variables -> Actions** and add:
-   - `GCP_PROJECT_ID`: Your GCP Project ID.
-   - `GCP_SA_KEY`: The JSON Key of a Service Account with role `Cloud Run Developer`, `Storage Admin` (for registry), and `Service Account User` (or set up Workload Identity Federation).
+---
+
+### 3. Deploying to Firebase Hosting (Custom Domain Routing)
+
+Firebase Hosting acts as the front gateway to map your custom domain (like `whoisdig.web.app`) and automatically proxy dynamic requests to your Cloud Run service.
+
+#### Deployment Steps:
+1. Log in to your Firebase account via the CLI:
+   ```bash
+   npx firebase login
+   ```
+2. Deploy the hosting configuration (defined in `firebase.json`):
+   ```bash
+   npx firebase deploy --only hosting --project=whoisdig
+   ```
+
+---
+
+### 4. Continuous Integration & Deployment (CI/CD via GitHub Actions)
+
+Every push to the `main` or `master` branch will trigger an automated deployment using `.github/workflows/deploy-cloudrun.yml`.
+
+#### Repository Setup:
+1. Under your GitHub Repository **Settings -> Secrets and variables -> Actions**, add the following repository secrets:
+   * `GCP_PROJECT_ID`: Set to `whoisdig`.
+   * `GCP_SA_KEY`: Set to the entire JSON private key of a Google IAM Service Account with least-privilege deployment roles (`run.admin`, `artifactregistry.writer`, `iam.serviceAccountUser`, and `iam.serviceAccountTokenCreator`).
+2. Push to GitHub! The runner will build, tag, push your Docker container to Artifact Registry, and rollout a clean, zero-downtime revision to Cloud Run.
 
 ---
 
