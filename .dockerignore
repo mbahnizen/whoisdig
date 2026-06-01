@@ -39,3 +39,4 @@ desktop.ini
 # Environment files (secrets should use env vars)
 .env
 .env.local
+sa-key.json
