@@ -301,9 +301,14 @@ function createWhoisCard(data) {
     const compactStatusStr = statusStr.replace(/\s+/g, '');
 
     // Backend explicitly marks unregistered domains with available=true
-    const isAvailable = data.available === true || statusStr === 'not found';
+    let isAvailable = data.available === true || statusStr === 'not found';
     const isRegistered = !isAvailable && (registrar || created || nsArr.length > 0 || rawStatuses.length > 0);
     const isInactive = isRegistered && nsArr.length === 0;
+
+    // Fix: Treat empty/null WHOIS results as available to render the correct UI
+    if (!isRegistered && !isAvailable) {
+        isAvailable = true;
+    }
 
     const attentionBadges = [];
     const metaBadges = [];
