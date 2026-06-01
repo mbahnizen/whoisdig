@@ -21,3 +21,4 @@ desktop.ini
 # Environment
 .env
 .env.local
+sa-key.json
