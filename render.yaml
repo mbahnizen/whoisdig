@@ -1,0 +1,30 @@
+# =============================================================================
+# WHOISDIG — Render Blueprint
+#
+# Render runs the existing Dockerfile unchanged: docker-entrypoint.sh already
+# reads $PORT at runtime, which is exactly what Render injects. No code change
+# is needed to move off Cloud Run.
+#
+# Deploy: push this file, then Render Dashboard → New → Blueprint → pick repo.
+#
+# ⚠️ Before committing to a host, read MIGRASI.md — WHOISDIG needs outbound
+#    TCP port 43 (raw WHOIS). Hosts that block it degrade the app to RDAP-only.
+# =============================================================================
+
+services:
+  - type: web
+    name: whoisdig
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    healthCheckPath: /
+    envVars:
+      # Restrict to the real origin once a domain is attached; '*' keeps the
+      # public API open, which matches the current Cloud Run behaviour.
+      - key: WHOISDIG_CORS_ORIGIN
+        value: "*"
+
+    # storage/ (cache, logs, uploads) is ephemeral on the free plan. That is
+    # acceptable: the SWR cache rebuilds itself on demand and nothing else is
+    # persisted. Attach a disk only if logs must survive restarts.
